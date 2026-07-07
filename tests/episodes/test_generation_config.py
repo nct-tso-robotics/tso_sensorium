@@ -7,7 +7,9 @@ from pathlib import Path
 from tso_sensorium.configuration import load_config
 import pytest
 
+from tso_sensorium.episodes.legend import DatasetMetadata, PhaseDefinition
 from tso_sensorium.episodes.generation_config import (
+    AnnotationsConfig,
     CsvWriterConfig,
     DatasetGenerationConfig,
     LeRobotWriterConfig,
@@ -151,3 +153,37 @@ class TestApplyGenerationOverrides:
                 config=DatasetGenerationConfig(),
                 overrides={"missing.field": 1},
             )
+
+
+class TestResolveLegend:
+    @pytest.mark.unit
+    def test_metadata_file_wins_over_inline_legend(self, tmp_path):
+        DatasetMetadata(
+            dataset_name="edited",
+            phase_legend={2: PhaseDefinition(name="new_phase", instructions=["go"])},
+        ).save(path=tmp_path / "dataset_metadata.json")
+        config = AnnotationsConfig(
+            legend=DatasetMetadata(
+                dataset_name="inline",
+                phase_legend={0: PhaseDefinition(name="old")},
+            )
+        )
+        resolved = config.resolve_legend(recordings_root=tmp_path)
+        assert resolved.dataset_name == "edited"
+        assert resolved.phase_legend[2].instructions == ["go"]
+
+    @pytest.mark.unit
+    def test_inline_legend_seeds_when_no_file(self, tmp_path):
+        config = AnnotationsConfig(
+            legend=DatasetMetadata(
+                dataset_name="inline",
+                phase_legend={0: PhaseDefinition(name="old")},
+            )
+        )
+        resolved = config.resolve_legend(recordings_root=tmp_path)
+        assert resolved.dataset_name == "inline"
+
+    @pytest.mark.unit
+    def test_empty_everywhere_gives_empty_metadata(self, tmp_path):
+        resolved = AnnotationsConfig().resolve_legend(recordings_root=tmp_path)
+        assert resolved.phase_legend == {}

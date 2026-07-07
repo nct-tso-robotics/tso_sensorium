@@ -55,6 +55,26 @@ class AnnotationsConfig(ConfigModel):
     metadata_file: str = DATASET_METADATA_FILE_NAME
     require_full_coverage: bool = False
 
+    def resolve_legend(self, recordings_root: Path) -> DatasetMetadata:
+        """Resolve the effective dataset metadata for a recordings root.
+
+        The metadata file at the root wins when it defines a legend (it is
+        what the dashboard edits); the inline ``legend`` only seeds new
+        datasets that have no file yet.
+
+        Args:
+            recordings_root: Directory containing one folder per episode.
+
+        Returns:
+            The effective dataset metadata.
+        """
+        metadata = DatasetMetadata.load(path=Path(recordings_root) / self.metadata_file)
+        if metadata.phase_legend:
+            return metadata
+        if self.legend is not None:
+            return self.legend
+        return metadata
+
 
 class VideoSourceConfig(ConfigModel):
     """A recorded video aligned into the episode as frame paths.

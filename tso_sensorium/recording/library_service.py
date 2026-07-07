@@ -85,15 +85,11 @@ class LibraryService:
         legend from the generation config is offered as the starting
         point.
         """
-        metadata = DatasetMetadata.load(path=self.metadata_path())
-        if (
-            not metadata.phase_legend
-            and self.generation is not None
-            and self.generation.annotations is not None
-            and self.generation.annotations.legend is not None
-        ):
-            return self.generation.annotations.legend
-        return metadata
+        if self.generation is not None and self.generation.annotations is not None:
+            return self.generation.annotations.resolve_legend(
+                recordings_root=self.recordings_root
+            )
+        return DatasetMetadata.load(path=self.metadata_path())
 
     def generation_running(self) -> bool:
         """Whether a generation thread is currently active."""
