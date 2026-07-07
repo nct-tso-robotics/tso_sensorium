@@ -55,7 +55,7 @@ def rotate_point_with_quaternion(
             [2 * x * z - 2 * w * y, 2 * y * z + 2 * w * x, 1 - 2 * x**2 - 2 * y**2],
         ]
     )
-    return np.array(point) @ rotation_matrix
+    return rotation_matrix @ np.array(point)
 
 
 class TableTransform(ConfigModel, abc.ABC):

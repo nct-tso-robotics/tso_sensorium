@@ -270,3 +270,43 @@ def test_end_to_end_applies_annotations(tmp_path):
         "pull back now",
         "pull back now",
     ]
+
+
+@pytest.mark.integration
+def test_generation_without_annotations_preserves_curated_metadata(tmp_path):
+    from tso_sensorium.episodes.legend import DatasetMetadata, PhaseDefinition
+
+    recordings_root = tmp_path / "recordings"
+    _write_synthetic_recording(
+        episode_directory=recordings_root / "episode_000", frame_count=4
+    )
+    DatasetMetadata(
+        dataset_name="curated",
+        phase_legend={0: PhaseDefinition(name="approach", instructions=["go"])},
+    ).save(path=recordings_root / "dataset_metadata.json")
+
+    config = _synthetic_config(recordings_root=recordings_root)
+    config.annotations = None
+    generate_dataset(config=config)
+
+    reloaded = DatasetMetadata.load(path=recordings_root / "dataset_metadata.json")
+    assert reloaded.dataset_name == "curated"
+    assert reloaded.phase_legend[0].name == "approach"
+
+
+@pytest.mark.unit
+def test_duplicate_frames_directory_rejected(tmp_path):
+    from tso_sensorium.episodes.generation_config import VideoSourceConfig
+
+    config = _synthetic_config(recordings_root=tmp_path)
+    config.save_frames = True
+    config.videos = [
+        VideoSourceConfig(
+            video_file="a.mp4", timestamps_file="a.csv", frame_column="a"
+        ),
+        VideoSourceConfig(
+            video_file="b.mp4", timestamps_file="b.csv", frame_column="b"
+        ),
+    ]
+    with pytest.raises(ValueError, match="distinct frames_directory"):
+        generate_dataset(config=config)

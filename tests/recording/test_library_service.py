@@ -129,3 +129,30 @@ def test_directory_listing(library_client_factory, tmp_path):
 
     missing = client.get(f"/api/library/directories?path={root / 'nope'}")
     assert missing.status_code == 400
+
+
+@pytest.mark.unit
+def test_episode_name_traversal_rejected(library_client_factory):
+    client, root = library_client_factory()
+    (root / "real_ep").mkdir()
+    assert client.get("/api/episodes/real_ep/annotations").status_code == 200
+    # Whether the router (404) or the guard (400) rejects it, no annotation
+    # file is ever written outside the recordings root.
+    for evil in ("..", "%2e%2e", "sub%2fnested"):
+        put = client.put(f"/api/episodes/{evil}/annotations", json={"segments": []})
+        assert put.status_code != 200
+        assert not (root.parent / "annotations.json").exists()
+
+
+@pytest.mark.unit
+def test_episode_directory_guard_rejects_escape(tmp_path):
+    from tso_sensorium.recording.library_service import LibraryService
+
+    root = tmp_path / "recordings"
+    (root / "ep0").mkdir(parents=True)
+    library = LibraryService(recordings_root=root)
+    assert library.episode_directory(episode_name="ep0") == (root / "ep0").resolve()
+    with pytest.raises(ValueError, match="Invalid episode name"):
+        library.episode_directory(episode_name="..")
+    with pytest.raises(ValueError, match="Invalid episode name"):
+        library.episode_directory(episode_name="../../etc")

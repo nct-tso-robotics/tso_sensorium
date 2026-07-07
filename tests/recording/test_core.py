@@ -208,3 +208,38 @@ class TestVideoFileWriterClose:
         writer.close()
         writer.write_frame(frame=np.zeros((8, 6, 3), dtype=np.uint8))
         assert not (tmp_path / "camera.mp4").exists()
+
+
+class TestImageEncodings:
+    @pytest.mark.unit
+    def test_bgr8_passthrough(self):
+        frame = np.arange(2 * 2 * 3, dtype=np.uint8).reshape(2, 2, 3)
+        result = image_buffer_to_bgr_frame(
+            data=frame.tobytes(), height=2, width=2, encoding="bgr8"
+        )
+        np.testing.assert_array_equal(result, frame)
+
+    @pytest.mark.unit
+    def test_rgb8_swaps_red_and_blue(self):
+        rgb = np.zeros((1, 1, 3), dtype=np.uint8)
+        rgb[0, 0] = [10, 20, 30]  # R, G, B
+        result = image_buffer_to_bgr_frame(
+            data=rgb.tobytes(), height=1, width=1, encoding="rgb8"
+        )
+        assert result[0, 0].tolist() == [30, 20, 10]  # B, G, R
+
+    @pytest.mark.unit
+    def test_mono8_expands_to_three_channels(self):
+        mono = np.array([[7, 9]], dtype=np.uint8)
+        result = image_buffer_to_bgr_frame(
+            data=mono.tobytes(), height=1, width=2, encoding="mono8"
+        )
+        assert result.shape == (1, 2, 3)
+        assert result[0, 0].tolist() == [7, 7, 7]
+
+    @pytest.mark.unit
+    def test_unknown_encoding_raises(self):
+        with pytest.raises(ValueError, match="Unsupported image encoding 'yuv422'"):
+            image_buffer_to_bgr_frame(
+                data=b"\x00" * 6, height=1, width=1, encoding="yuv422"
+            )

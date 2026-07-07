@@ -59,6 +59,9 @@ def create_episode_assembler(
                 episode_directory=episode_directory,
                 annotations_config=config.annotations,
                 sync_column=config.sync_column,
+                boundary_tolerance_nanoseconds=int(
+                    config.max_sync_difference_seconds * 1e9
+                ),
             )
         for transform in config.table_transforms:
             table = transform.apply(table=table)
@@ -72,6 +75,7 @@ def apply_annotations(
     episode_directory: Path,
     annotations_config: AnnotationsConfig,
     sync_column: str,
+    boundary_tolerance_nanoseconds: int = 0,
 ) -> pd.DataFrame:
     """Join phase and language annotations onto an aligned episode table.
 
@@ -80,6 +84,9 @@ def apply_annotations(
         episode_directory: Episode folder holding the annotations file.
         annotations_config: How the annotations are applied.
         sync_column: Timestamp column of the table.
+        boundary_tolerance_nanoseconds: Slack applied at segment
+            boundaries, absorbing clock skew between the labeling source
+            and the join timeline.
 
     Returns:
         Table with the phase and language columns added.
@@ -96,7 +103,9 @@ def apply_annotations(
     phases = []
     languages = []
     for timestamp in table[sync_column]:
-        segment = annotations.segment_at(timestamp=timestamp)
+        segment = annotations.segment_at(
+            timestamp=timestamp, tolerance=boundary_tolerance_nanoseconds
+        )
         if segment is None:
             if annotations_config.require_full_coverage:
                 raise ValueError(
@@ -128,6 +137,14 @@ def generate_dataset(config: DatasetGenerationConfig) -> BuildReport:
     """
     if not config.recordings_root:
         raise ValueError("recordings_root is required")
+    if config.save_frames and len(config.videos) > 1:
+        frames_directories = [video.frames_directory for video in config.videos]
+        if len(set(frames_directories)) != len(frames_directories):
+            raise ValueError(
+                "Each video source needs a distinct frames_directory when"
+                " save_frames is enabled, otherwise extractions overwrite"
+                f" each other. Got: {frames_directories}"
+            )
     recordings_root = Path(config.recordings_root)
     dataset_metadata = None
     if config.annotations is not None:

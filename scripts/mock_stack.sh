@@ -15,8 +15,11 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROS_PORT=11350
 DASHBOARD_PORT=8080
 ANNOTATOR_PORT=8090
-LOG_DIR=/tmp/tso_sensorium_logs
-LEROBOT_PYTHON=/mnt/cluster/environments/mazzalore/miniforge3/envs/lerobot/bin/python
+LOG_DIR="${TSO_LOG_DIR:-/tmp/tso_sensorium_logs}"
+# Interpreter for the annotator, which needs the gui + lerobot extras and no
+# ROS. Override with the env var to point at your own environment; defaults
+# to whatever `python` resolves to on PATH.
+LEROBOT_PYTHON="${TSO_ANNOTATE_PYTHON:-python}"
 
 export PATH="$HOME/.pixi/bin:$PATH"
 export ROS_MASTER_URI="http://localhost:${ROS_PORT}"

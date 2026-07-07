@@ -84,3 +84,20 @@ class TestEpisodeAnnotations:
         )
         phases = [(segment.phase, segment.source) for segment in annotations.segments]
         assert phases == [(2, "auto"), (1, "manual")]
+
+
+@pytest.mark.unit
+def test_segment_at_tolerance_extends_only_outer_edges():
+    annotations = EpisodeAnnotations(
+        segments=[
+            PhaseSegment(start=100, end=200, phase=0),
+            PhaseSegment(start=200, end=300, phase=1),
+        ]
+    )
+    # Interior boundary keeps exact semantics: 200 belongs to phase 1.
+    assert annotations.segment_at(timestamp=200, tolerance=50).phase == 1
+    # Outer edges extend by tolerance.
+    assert annotations.segment_at(timestamp=80, tolerance=50).phase == 0
+    assert annotations.segment_at(timestamp=340, tolerance=50).phase == 1
+    # Beyond tolerance stays uncovered.
+    assert annotations.segment_at(timestamp=40, tolerance=50) is None

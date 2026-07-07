@@ -104,11 +104,38 @@ class EpisodeAnnotations:
         }
         Path(path).write_text(json.dumps(payload, indent=2))
 
-    def segment_at(self, timestamp: Union[int, float]) -> Optional[PhaseSegment]:
-        """Return the segment covering a timestamp, if any."""
+    def segment_at(
+        self, timestamp: Union[int, float], tolerance: Union[int, float] = 0
+    ) -> Optional[PhaseSegment]:
+        """Return the segment covering a timestamp, if any.
+
+        Segments are labeled on the recorded state clock; when the join
+        timeline runs on a different source's clock (e.g. video frames),
+        an edge timestamp can land just outside the covered span. The
+        tolerance widens each segment's boundaries so a timestamp within
+        ``tolerance`` of a boundary still resolves; interior gaps between
+        segments are unaffected because segments are contiguous.
+
+        Args:
+            timestamp: Timestamp to look up.
+            tolerance: Boundary slack in the timestamp's units.
+
+        Returns:
+            The covering segment, or ``None``.
+        """
         for segment in self.segments:
             if segment.contains(timestamp=timestamp):
                 return segment
+        # Tolerance only extends the outer edges of the covered span, so
+        # interior boundaries between contiguous segments keep their exact
+        # semantics and never overlap.
+        if tolerance and self.segments:
+            first = min(self.segments, key=lambda segment: segment.start)
+            last = max(self.segments, key=lambda segment: segment.end)
+            if first.start - tolerance <= timestamp < first.start:
+                return first
+            if last.end <= timestamp < last.end + tolerance:
+                return last
         return None
 
     def replace_auto_segments(

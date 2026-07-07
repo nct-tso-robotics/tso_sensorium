@@ -1,4 +1,5 @@
 # Standalone annotation app over the mock recordings (no ROS needed).
 recordings_root: /tmp/tso_sensorium_mock
+host: 0.0.0.0
 port: 8090
 generation: !include ../dataset/mock.yaml

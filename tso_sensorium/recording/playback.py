@@ -60,5 +60,7 @@ def ensure_playback_copy(source: Path) -> Path:
         )
         if result.returncode == 0:
             return cache
-        errors.append(f"{encoder}: {result.stderr.strip().splitlines()[-1]}")
+        stderr_lines = result.stderr.strip().splitlines()
+        detail = stderr_lines[-1] if stderr_lines else f"exit code {result.returncode}"
+        errors.append(f"{encoder}: {detail}")
     raise RuntimeError(f"Transcoding failed ({'; '.join(errors)})")

@@ -30,6 +30,7 @@ IDLE_STATE = "idle"
 RECORDING_STATE = "recording"
 MJPEG_BOUNDARY = "frame"
 MJPEG_FRAME_INTERVAL_SECONDS = 0.05
+MJPEG_KEEPALIVE_SECONDS = 2.0
 
 
 class LivenessMonitor(Protocol):
@@ -257,10 +258,21 @@ def create_app(service: RecordingService) -> Flask:
             return jsonify({"error": "No camera feed configured"}), 404
 
         def frames() -> Iterator[bytes]:
+            keepalive = b"--" + MJPEG_BOUNDARY.encode() + b"\r\n"
+            idle_seconds = 0.0
             while True:
                 jpeg = service.camera_feed.latest_jpeg
                 if jpeg is not None:
                     yield _mjpeg_part(jpeg=jpeg)
+                    idle_seconds = 0.0
+                else:
+                    # Force a periodic socket write even with no frame, so a
+                    # disconnected client is detected instead of the handler
+                    # thread sleeping forever.
+                    idle_seconds += MJPEG_FRAME_INTERVAL_SECONDS
+                    if idle_seconds >= MJPEG_KEEPALIVE_SECONDS:
+                        yield keepalive
+                        idle_seconds = 0.0
                 time.sleep(MJPEG_FRAME_INTERVAL_SECONDS)
 
         return _mjpeg_response(frames=frames())

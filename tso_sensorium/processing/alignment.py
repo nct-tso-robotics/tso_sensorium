@@ -49,6 +49,11 @@ class StateData:
         self_sync_col = self.get_sync_col_data().to_numpy()
         source_sync_col = source_sync_dataframe.to_numpy()
         aligned_sync_col = np.zeros_like(source_sync_col)
+        if np.isnan(self_sync_col).any() or np.isnan(source_sync_col).any():
+            raise ValueError(
+                f"Timestamp column contains missing values in"
+                f" {self.state_data_path}. Discarding episode."
+            )
 
         max_diff = 0
         # For each timestamp in source data, find the closest match in state data

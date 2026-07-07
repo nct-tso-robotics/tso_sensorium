@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import sys
+from importlib.resources import files
 from pathlib import Path
 from typing import Union
-
-if sys.version_info >= (3, 9):
-    from importlib.resources import files
-else:
-    from importlib_resources import files
 
 import tso_sensorium
 

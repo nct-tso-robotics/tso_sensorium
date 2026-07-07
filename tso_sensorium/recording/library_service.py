@@ -64,12 +64,28 @@ class LibraryService:
             raise ValueError(f"Not a directory: {recordings_root}")
         self.recordings_root = root
 
+    def episode_directory(self, episode_name: str) -> Path:
+        """Resolve an episode folder, rejecting names that escape the root.
+
+        Args:
+            episode_name: Episode folder name from a request.
+
+        Returns:
+            The resolved episode directory, always a direct child of the
+            recordings root.
+        """
+        root = self.recordings_root.resolve()
+        candidate = (root / episode_name).resolve()
+        if candidate.parent != root:
+            raise ValueError(f"Invalid episode name: {episode_name}")
+        return candidate
+
     def annotations_path(self, episode_name: str) -> Path:
         """Annotations file of one episode."""
         annotations_file = ANNOTATIONS_FILE_NAME
         if self.generation is not None and self.generation.annotations is not None:
             annotations_file = self.generation.annotations.file_name
-        return self.recordings_root / episode_name / annotations_file
+        return self.episode_directory(episode_name=episode_name) / annotations_file
 
     def metadata_path(self) -> Path:
         """Dataset metadata file at the recordings root."""
@@ -192,13 +208,15 @@ def register_library_routes(app: Flask, library: LibraryService) -> None:
     @app.get("/episodes/<episode_name>/<file_name>")
     def episode_file(episode_name: str, file_name: str):
         return send_from_directory(
-            library.recordings_root / episode_name, file_name, conditional=True
+            library.episode_directory(episode_name=episode_name),
+            file_name,
+            conditional=True,
         )
 
     @app.get("/episodes/<episode_name>/<file_name>/playback")
     def episode_playback(episode_name: str, file_name: str):
         playback_copy = ensure_playback_copy(
-            source=library.recordings_root / episode_name / file_name
+            source=library.episode_directory(episode_name=episode_name) / file_name
         )
         return send_from_directory(
             playback_copy.parent, playback_copy.name, conditional=True
@@ -213,8 +231,7 @@ def register_library_routes(app: Flask, library: LibraryService) -> None:
         generation = library.generation
         if generation is not None and generation.videos:
             timestamps_path = (
-                library.recordings_root
-                / episode_name
+                library.episode_directory(episode_name=episode_name)
                 / generation.videos[0].timestamps_file
             )
             if timestamps_path.is_file():

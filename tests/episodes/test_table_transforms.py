@@ -167,3 +167,13 @@ def test_choice_registry_decodes_by_type_key():
         {"type": "drop_columns", "columns": ["a", "b"]}
     )
     assert transform == DropColumns(columns=["a", "b"])
+
+
+@pytest.mark.unit
+def test_rotate_point_with_quaternion_applies_forward_rotation():
+    # +90 degrees about z maps (1,0,0) -> (0,1,0).
+    result = rotate_point_with_quaternion(
+        quaternion=[0.0, 0.0, 0.7071067811865476, 0.7071067811865476],
+        point=[1.0, 0.0, 0.0],
+    )
+    np.testing.assert_allclose(result, [0.0, 1.0, 0.0], atol=1e-6)

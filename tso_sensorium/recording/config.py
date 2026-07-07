@@ -111,7 +111,9 @@ class LibraryAppConfig(ConfigModel):
         recordings_root: Directory containing one folder per episode.
         generation: Dataset generation offered in the dashboard; disabled
             when ``None``.
-        host: Interface the HTTP server binds.
+        host: Interface the HTTP server binds. Defaults to loopback; the
+            dashboard browses and serves the filesystem without
+            authentication, so set ``0.0.0.0`` only on a trusted network.
         port: TCP port the HTTP server binds.
         ssl_certificate: TLS certificate path; with ``ssl_private_key``
             the dashboard is served over HTTPS (required for WebXR).
@@ -120,7 +122,7 @@ class LibraryAppConfig(ConfigModel):
 
     recordings_root: str = ""
     generation: Optional[DatasetGenerationConfig] = None
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8080
     ssl_certificate: Optional[str] = None
     ssl_private_key: Optional[str] = None
@@ -132,7 +134,9 @@ class RecordingServiceConfig(ConfigModel):
     Args:
         session: Recording session configuration, including the recorder
             catalog offered in the dashboard.
-        host: Interface the HTTP server binds.
+        host: Interface the HTTP server binds. Defaults to loopback; the
+            dashboard browses and serves the filesystem without
+            authentication, so set ``0.0.0.0`` only on a trusted network.
         port: TCP port the HTTP server binds.
         camera_topic: Image topic shown as the live feed; empty disables
             the feed.
@@ -149,7 +153,7 @@ class RecordingServiceConfig(ConfigModel):
     session: RecordingSessionConfig = Field(
         default_factory=lambda: RecordingSessionConfig()
     )
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8080
     camera_topic: str = ""
     staleness_seconds: float = 1.0
