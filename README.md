@@ -145,6 +145,27 @@ python -m tso_sensorium.scripts.record_service \
     --config_path configs/recording/mock_service.yaml
 ```
 
+### 3D viewing (stereo cameras)
+
+With a `stereo:` section in the service config (see
+`configs/recording/tso_testbed_service.yaml`), the dashboard camera stage
+gains two extra view modes built from the interlaced stereo stream,
+deinterlaced and rectified with the calibration:
+
+- **Anaglyph 3D** — red-cyan composite of the two eyes; depth perception
+  on any normal monitor with paper glasses.
+- **Immersive 3D** — a WebXR session rendering the left and right eyes
+  separately on a virtual screen; open the dashboard in a VR headset's
+  browser (Meta Quest works) and tap the button. WebXR requires HTTPS:
+  either serve the dashboard with `ssl_certificate`/`ssl_private_key`
+  (a self-signed certificate is fine, accept it once on the headset) or
+  reach the page as `localhost` through `adb reverse`.
+
+The streams are passive taps on the camera topic (`/stream/stereo`,
+`/stream/anaglyph`); recording never depends on them. A `mode: duplicate`
+option mirrors a mono camera to both eyes for testing the pipeline
+without stereo hardware.
+
 ### Annotation and dataset studio (no ROS required)
 
 The Library section also runs as a standalone app on any machine — a

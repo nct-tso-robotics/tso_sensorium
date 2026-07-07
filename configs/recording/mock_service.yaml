@@ -4,6 +4,10 @@
 host: 0.0.0.0
 port: 8080
 camera_topic: /mock/camera
+# Mock camera is mono: both eyes get the same frame (tests the 3D
+# pipeline without depth).
+stereo:
+  mode: duplicate
 staleness_seconds: 1.0
 
 session:

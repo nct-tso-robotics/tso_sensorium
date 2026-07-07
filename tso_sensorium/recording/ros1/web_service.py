@@ -13,9 +13,13 @@ import threading
 import time
 from typing import Iterator, Optional
 
+import cv2
+import numpy as np
 from flask import Flask, Response, jsonify, request
 
 from sensor_msgs.msg import Image
+
+from tso_sensorium.processing.stereo_view import StereoViewProcessor
 
 from tso_sensorium.recording.config import (
     RecordingServiceConfig,
@@ -71,6 +75,15 @@ class RecordingService:
         self.camera_feed = (
             CameraFeed(topic_name=config.camera_topic) if config.camera_topic else None
         )
+        self.stereo_view = (
+            StereoViewProcessor(
+                mode=config.stereo.mode,
+                left_odd=config.stereo.left_odd,
+                calibration_path=config.stereo.calibration_path,
+            )
+            if config.stereo is not None and self.camera_feed is not None
+            else None
+        )
 
     def status(self) -> dict:
         """Current state, sensor liveness, and library information."""
@@ -95,6 +108,7 @@ class RecordingService:
         return {
             "state": RECORDING_STATE if recording else IDLE_STATE,
             "recording_available": True,
+            "stereo_available": self.stereo_view is not None,
             "episode_name": episode_name,
             "elapsed_seconds": elapsed,
             "camera_topic": self.config.camera_topic,
@@ -187,6 +201,18 @@ def create_app(service: RecordingService) -> Flask:
     def stop_recording():
         return jsonify(service.stop_recording())
 
+    def _mjpeg_response(frames: Iterator[bytes]) -> Response:
+        return Response(
+            frames,
+            mimetype=f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}",
+        )
+
+    def _mjpeg_part(jpeg: bytes) -> bytes:
+        return (
+            b"--" + MJPEG_BOUNDARY.encode() + b"\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
+        )
+
     @app.get("/stream/camera")
     def camera_stream():
         if service.camera_feed is None:
@@ -196,15 +222,43 @@ def create_app(service: RecordingService) -> Flask:
             while True:
                 jpeg = service.camera_feed.latest_jpeg
                 if jpeg is not None:
-                    yield (
-                        b"--" + MJPEG_BOUNDARY.encode() + b"\r\n"
-                        b"Content-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
-                    )
+                    yield _mjpeg_part(jpeg=jpeg)
                 time.sleep(MJPEG_FRAME_INTERVAL_SECONDS)
 
-        return Response(
-            frames(),
-            mimetype=f"multipart/x-mixed-replace; boundary={MJPEG_BOUNDARY}",
-        )
+        return _mjpeg_response(frames=frames())
+
+    def _stereo_stream(compose_view) -> Response:
+        jpeg_quality = service.config.stereo.jpeg_quality
+
+        def frames() -> Iterator[bytes]:
+            previous = None
+            while True:
+                jpeg = service.camera_feed.latest_jpeg
+                if jpeg is not None and jpeg is not previous:
+                    previous = jpeg
+                    frame = cv2.imdecode(
+                        np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR
+                    )
+                    view = compose_view(frame=frame)
+                    encoded_ok, encoded = cv2.imencode(
+                        ".jpg", view, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
+                    )
+                    if encoded_ok:
+                        yield _mjpeg_part(jpeg=np.asarray(encoded).tobytes())
+                time.sleep(MJPEG_FRAME_INTERVAL_SECONDS)
+
+        return _mjpeg_response(frames=frames())
+
+    @app.get("/stream/stereo")
+    def stereo_stream():
+        if service.stereo_view is None:
+            return jsonify({"error": "No stereo view configured"}), 404
+        return _stereo_stream(compose_view=service.stereo_view.side_by_side)
+
+    @app.get("/stream/anaglyph")
+    def anaglyph_stream():
+        if service.stereo_view is None:
+            return jsonify({"error": "No stereo view configured"}), 404
+        return _stereo_stream(compose_view=service.stereo_view.anaglyph)
 
     return app

@@ -1,4 +1,8 @@
 session: !include tso_testbed.yaml
+stereo:
+  mode: interlaced
+  left_odd: true
+  calibration_path: package://storz_endoscope_calibration.yml
 host: 0.0.0.0
 port: 8080
 camera_topic: /laparoscope/camera/left/image_raw

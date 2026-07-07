@@ -85,6 +85,25 @@ class RecordingSessionConfig(ConfigModel):
     recorders: List[AnyRecorderConfig] = Field(default_factory=list)
 
 
+class StereoViewConfig(ConfigModel):
+    """Live 3D preview streams derived from the dashboard camera topic.
+
+    Args:
+        mode: "interlaced" splits odd/even rows into the two eyes;
+            "duplicate" mirrors the mono frame to both eyes (no depth;
+            for testing without a stereo camera).
+        left_odd: Whether the left image is stored in the odd rows.
+        calibration_path: Stereo calibration used to rectify the pair;
+            empty skips rectification. Supports ``package://`` assets.
+        jpeg_quality: JPEG quality of the streamed frames.
+    """
+
+    mode: Literal["interlaced", "duplicate"] = "interlaced"
+    left_odd: bool = True
+    calibration_path: str = ""
+    jpeg_quality: int = 85
+
+
 class LibraryAppConfig(ConfigModel):
     """Standalone annotation and generation app.
 
@@ -94,12 +113,17 @@ class LibraryAppConfig(ConfigModel):
             when ``None``.
         host: Interface the HTTP server binds.
         port: TCP port the HTTP server binds.
+        ssl_certificate: TLS certificate path; with ``ssl_private_key``
+            the dashboard is served over HTTPS (required for WebXR).
+        ssl_private_key: TLS private key path.
     """
 
     recordings_root: str = ""
     generation: Optional[DatasetGenerationConfig] = None
     host: str = "0.0.0.0"
     port: int = 8080
+    ssl_certificate: Optional[str] = None
+    ssl_private_key: Optional[str] = None
 
 
 class RecordingServiceConfig(ConfigModel):
@@ -113,6 +137,11 @@ class RecordingServiceConfig(ConfigModel):
         camera_topic: Image topic shown as the live feed; empty disables
             the feed.
         staleness_seconds: Age after which a sensor counts as stale.
+        stereo: Live 3D preview streams (side-by-side and anaglyph) built
+            from the camera topic; disabled when ``None``.
+        ssl_certificate: TLS certificate path; with ``ssl_private_key``
+            the dashboard is served over HTTPS (required for WebXR).
+        ssl_private_key: TLS private key path.
         generation: Dataset generation run offered in the dashboard; its
             ``recordings_root`` defaults to the session output folder.
     """
@@ -124,4 +153,7 @@ class RecordingServiceConfig(ConfigModel):
     port: int = 8080
     camera_topic: str = ""
     staleness_seconds: float = 1.0
+    stereo: Optional[StereoViewConfig] = None
+    ssl_certificate: Optional[str] = None
+    ssl_private_key: Optional[str] = None
     generation: Optional[DatasetGenerationConfig] = None

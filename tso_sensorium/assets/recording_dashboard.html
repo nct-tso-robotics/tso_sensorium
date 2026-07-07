@@ -85,6 +85,10 @@
     font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: #ff8589;
   }
   .rec-badge .led { width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1s steps(2, start) infinite; }
+  .view-modes { position: absolute; bottom: 12px; right: 12px; display: flex; gap: 4px; background: #000000aa; backdrop-filter: blur(4px); border-radius: 999px; padding: 4px; }
+  .view-modes button { border: 1px solid transparent; background: transparent; color: #c8d2e6; font-size: 12px; font-family: var(--font); padding: 5px 13px; border-radius: 999px; cursor: pointer; }
+  .view-modes button:hover { color: #fff; }
+  .view-modes button.active { background: #ffffff22; color: var(--gold); border-color: #d8b26a55; }
 
   .transport { display: flex; align-items: center; gap: 16px; padding: 15px 18px; border-top: 1px solid var(--border); background: #1a254088; }
   #episode-name { flex: 1; background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); padding: 10px 13px; border-radius: 10px; font-family: var(--mono); font-size: 13px; }
@@ -210,6 +214,11 @@
         <img id="feed" alt="">
         <div class="placeholder" id="feed-missing" hidden>No camera feed configured</div>
         <div class="rec-badge" id="rec-badge"><span class="led"></span>REC</div>
+        <div class="view-modes view-hidden" id="view-modes">
+          <button data-mode="live" class="active">Live</button>
+          <button data-mode="anaglyph" title="red-cyan glasses on any monitor">Anaglyph 3D</button>
+          <button id="enter-xr" title="stereoscopic view in a VR headset">&#128374; Immersive 3D</button>
+        </div>
       </div>
       <div class="transport">
         <button class="record-button" id="record" title="Start / stop demonstration"><span class="core"></span></button>
@@ -354,6 +363,7 @@ async function refreshStatus() {
   const status = await response.json();
   state.recording = status.state === "recording";
   state.sensors = status.sensors;
+  applyStereoAvailability(status.stereo_available === true);
   if (status.recording_available === false) {
     document.querySelector('#nav button[data-view="record"]').classList.add("view-hidden");
     if (!document.getElementById("view-record").classList.contains("view-hidden")) switchView("library");
@@ -714,6 +724,126 @@ document.getElementById("root-scan").addEventListener("click", async () => {
   refreshEpisodes();
   loadLegend();
 });
+
+let stereoAvailable = false;
+
+function applyStereoAvailability(available) {
+  if (available === stereoAvailable) return;
+  stereoAvailable = available;
+  document.getElementById("view-modes").classList.toggle("view-hidden", !available);
+}
+
+for (const button of document.querySelectorAll('#view-modes button[data-mode]')) {
+  button.addEventListener("click", () => {
+    for (const other of document.querySelectorAll('#view-modes button[data-mode]')) {
+      other.classList.toggle("active", other === button);
+    }
+    const feed = document.getElementById("feed");
+    feed.src = button.dataset.mode === "anaglyph" ? "/stream/anaglyph" : "/stream/camera";
+  });
+}
+
+const XR_VERTEX_SHADER = `
+attribute vec2 position;
+uniform mat4 projection;
+uniform mat4 view;
+uniform float screenZ;
+varying vec2 uv;
+void main() {
+  uv = position * 0.5 + 0.5;
+  vec4 world = vec4(position.x * 1.6, position.y * 0.9 + 1.4, screenZ, 1.0);
+  gl_Position = projection * view * world;
+}`;
+
+const XR_FRAGMENT_SHADER = `
+precision mediump float;
+uniform sampler2D feed;
+uniform float eyeOffset;
+varying vec2 uv;
+void main() {
+  gl_FragColor = texture2D(feed, vec2(uv.x * 0.5 + eyeOffset, 1.0 - uv.y));
+}`;
+
+function compileXrProgram(gl) {
+  const compile = (kind, source) => {
+    const shader = gl.createShader(kind);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    return shader;
+  };
+  const program = gl.createProgram();
+  gl.attachShader(program, compile(gl.VERTEX_SHADER, XR_VERTEX_SHADER));
+  gl.attachShader(program, compile(gl.FRAGMENT_SHADER, XR_FRAGMENT_SHADER));
+  gl.linkProgram(program);
+  return program;
+}
+
+async function enterImmersiveView() {
+  if (!window.isSecureContext) {
+    alert("Immersive mode needs HTTPS (or open the page as localhost via adb reverse).");
+    return;
+  }
+  if (!navigator.xr || !(await navigator.xr.isSessionSupported("immersive-vr"))) {
+    alert("No VR headset detected in this browser.");
+    return;
+  }
+  const stereoImage = document.createElement("img");
+  stereoImage.crossOrigin = "anonymous";
+  stereoImage.src = "/stream/stereo";
+
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl", { xrCompatible: true });
+  const session = await navigator.xr.requestSession("immersive-vr");
+  session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl) });
+  const space = await session.requestReferenceSpace("local");
+
+  const program = compileXrProgram(gl);
+  gl.useProgram(program);
+  const quad = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const positionLocation = gl.getAttribLocation(program, "position");
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+  const projectionLocation = gl.getUniformLocation(program, "projection");
+  const viewLocation = gl.getUniformLocation(program, "view");
+  const eyeOffsetLocation = gl.getUniformLocation(program, "eyeOffset");
+  const screenZLocation = gl.getUniformLocation(program, "screenZ");
+  gl.uniform1f(screenZLocation, -2.2);
+
+  const onFrame = (time, frame) => {
+    session.requestAnimationFrame(onFrame);
+    const pose = frame.getViewerPose(space);
+    if (!pose) return;
+    if (stereoImage.complete && stereoImage.naturalWidth > 0) {
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, stereoImage);
+    }
+    const layer = session.renderState.baseLayer;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+    gl.clearColor(0.03, 0.04, 0.09, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    for (const view of pose.views) {
+      const viewport = layer.getViewport(view);
+      gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+      gl.uniformMatrix4fv(projectionLocation, false, view.projectionMatrix);
+      gl.uniformMatrix4fv(viewLocation, false, view.transform.inverse.matrix);
+      gl.uniform1f(eyeOffsetLocation, view.eye === "right" ? 0.5 : 0.0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+  };
+  session.requestAnimationFrame(onFrame);
+  session.addEventListener("end", () => { stereoImage.src = ""; });
+}
+
+document.getElementById("enter-xr").addEventListener("click", enterImmersiveView);
 
 function renderLegendEditor() {
   document.getElementById("legend-dataset").value = state.legend.dataset_name || "";

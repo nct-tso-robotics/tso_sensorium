@@ -39,7 +39,10 @@ def run(config: LibraryAppConfig) -> None:
     )
     app = create_library_app(library=library)
     print(f"Annotation dashboard on http://{config.host}:{config.port}")
-    app.run(host=config.host, port=config.port, threaded=True)
+    ssl_context = None
+    if config.ssl_certificate and config.ssl_private_key:
+        ssl_context = (config.ssl_certificate, config.ssl_private_key)
+    app.run(host=config.host, port=config.port, threaded=True, ssl_context=ssl_context)
 
 
 def main() -> None:

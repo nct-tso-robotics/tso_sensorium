@@ -19,6 +19,7 @@ from tso_sensorium.episodes.generation_config import (  # noqa: E402
 from tso_sensorium.recording.config import (  # noqa: E402
     RecordingServiceConfig,
     RecordingSessionConfig,
+    StereoViewConfig,
     TopicRecorderConfig,
     VideoRecorderConfig,
 )
@@ -28,13 +29,14 @@ from tso_sensorium.recording.ros1.web_service import (  # noqa: E402
 )
 
 STATE_TOPIC = "/webtest/state"
+CAMERA_TOPIC = "/webtest/camera"
 
 
 @pytest.fixture
 def service_factory(ros_node, tmp_path):
     services = []
 
-    def factory(with_generation=False) -> RecordingService:
+    def factory(with_generation=False, stereo=False) -> RecordingService:
         generation = None
         if with_generation:
             generation = DatasetGenerationConfig(
@@ -55,6 +57,8 @@ def service_factory(ros_node, tmp_path):
                 ],
             ),
             staleness_seconds=1.0,
+            camera_topic=CAMERA_TOPIC if stereo else "",
+            stereo=StereoViewConfig(mode="duplicate") if stereo else None,
             generation=generation,
         )
         service = RecordingService(config=config)
@@ -239,3 +243,30 @@ def test_annotation_endpoints_round_trip(service_factory, tmp_path):
         json={"segments": [{"start": 5, "end": 2, "phase": 0}]},
     )
     assert invalid.status_code == 400
+
+
+@pytest.mark.integration
+def test_stereo_and_anaglyph_streams(service_factory):
+    service = service_factory(stereo=True)
+    client = create_app(service=service).test_client()
+
+    frame = np.full((8, 6, 3), 90, dtype=np.uint8)
+    message = Image(height=8, width=6, encoding="bgr8", step=18, data=frame.tobytes())
+    publisher = rospy.Publisher(CAMERA_TOPIC, Image, queue_size=1, latch=True)
+    deadline = time.monotonic() + 5.0
+    while service.camera_feed.latest_jpeg is None and time.monotonic() < deadline:
+        publisher.publish(message)
+        time.sleep(0.1)
+    publisher.unregister()
+    assert service.camera_feed.latest_jpeg is not None
+
+    assert client.get("/api/status").get_json()["stereo_available"] is True
+    for route in ("/stream/stereo", "/stream/anaglyph"):
+        response = client.get(route)
+        chunk = next(response.response)
+        assert b"Content-Type: image/jpeg" in chunk
+        response.close()
+
+    no_stereo = create_app(service=service_factory()).test_client()
+    assert no_stereo.get("/stream/stereo").status_code == 404
+    assert no_stereo.get("/api/status").get_json()["stereo_available"] is False

@@ -44,7 +44,10 @@ def run(config: RecordingServiceConfig) -> None:
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
     print(f"Recording dashboard on http://{config.host}:{config.port}")
-    app.run(host=config.host, port=config.port, threaded=True)
+    ssl_context = None
+    if config.ssl_certificate and config.ssl_private_key:
+        ssl_context = (config.ssl_certificate, config.ssl_private_key)
+    app.run(host=config.host, port=config.port, threaded=True, ssl_context=ssl_context)
     service.close()
 
 

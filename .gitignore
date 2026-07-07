@@ -157,3 +157,6 @@ MEMO.md
 
 # Scratch datasets from local testing
 lerobot_try/
+
+# Local TLS certificates
+certs/
