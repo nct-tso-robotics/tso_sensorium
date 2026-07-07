@@ -238,6 +238,7 @@
         <div class="field-label">Absolute path on the server containing one folder per recorded episode</div>
         <div class="row">
           <input type="text" id="library-root" placeholder="/data/recordings">
+          <button class="ann-button" id="root-browse">Browse&hellip;</button>
           <button class="ann-button" id="root-scan">Scan</button>
         </div>
         <span class="hint" id="root-hint"></span>
@@ -364,6 +365,7 @@ async function refreshStatus() {
   state.recording = status.state === "recording";
   state.sensors = status.sensors;
   applyStereoAvailability(status.stereo_available === true);
+  document.getElementById("output-folder-display").textContent = status.output_folder || "";
   if (status.recording_available === false) {
     document.querySelector('#nav button[data-view="record"]').classList.add("view-hidden");
     if (!document.getElementById("view-record").classList.contains("view-hidden")) switchView("library");
@@ -844,6 +846,68 @@ async function enterImmersiveView() {
 }
 
 document.getElementById("enter-xr").addEventListener("click", enterImmersiveView);
+const dirPicker = { path: null, onSelect: null };
+
+async function loadPickerDirectory(path) {
+  const response = await fetch(`/api/library/directories?path=${encodeURIComponent(path)}`);
+  const payload = await response.json();
+  if (!response.ok) return;
+  dirPicker.path = payload.path;
+  document.getElementById("dir-current").textContent = payload.path;
+  const list = document.getElementById("dir-list");
+  list.innerHTML = "";
+  const entries = payload.parent ? [["..", payload.parent]] : [];
+  for (const name of payload.directories) {
+    entries.push([name, payload.path === "/" ? `/${name}` : `${payload.path}/${name}`]);
+  }
+  for (const [name, target] of entries) {
+    const entry = document.createElement("div");
+    entry.className = "entry";
+    entry.innerHTML = `<span>&#128193;</span>${name}`;
+    entry.addEventListener("click", () => loadPickerDirectory(target));
+    list.appendChild(entry);
+  }
+}
+
+function openDirectoryPicker(startPath, onSelect) {
+  dirPicker.onSelect = onSelect;
+  document.getElementById("dir-picker").classList.remove("view-hidden");
+  loadPickerDirectory(startPath);
+}
+
+document.getElementById("dir-cancel").addEventListener("click", () => {
+  document.getElementById("dir-picker").classList.add("view-hidden");
+});
+document.getElementById("dir-select").addEventListener("click", () => {
+  document.getElementById("dir-picker").classList.add("view-hidden");
+  if (dirPicker.onSelect && dirPicker.path) dirPicker.onSelect(dirPicker.path);
+});
+
+document.getElementById("change-output-folder").addEventListener("click", () => {
+  const current = document.getElementById("output-folder-display").textContent || "/";
+  openDirectoryPicker(current, async (path) => {
+    const response = await fetch("/api/recording/output_folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      alert(payload.error || "Could not switch folder");
+      return;
+    }
+    refreshEpisodes();
+    loadLegend();
+  });
+});
+
+document.getElementById("root-browse").addEventListener("click", () => {
+  const current = document.getElementById("library-root").value || "/";
+  openDirectoryPicker(current, (path) => {
+    document.getElementById("library-root").value = path;
+    document.getElementById("root-scan").click();
+  });
+});
 
 function renderLegendEditor() {
   document.getElementById("legend-dataset").value = state.legend.dataset_name || "";

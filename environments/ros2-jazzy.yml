@@ -15,6 +15,7 @@ dependencies:
   - tqdm
   - pytest
   - pip
+  - flask>=3
   - pip:
       - pydantic>=2.7
       - pyyaml-include>=1.3,<2.0

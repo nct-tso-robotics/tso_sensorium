@@ -24,6 +24,7 @@ from tso_sensorium.recording.config import (  # noqa: E402
     VideoRecorderConfig,
 )
 from tso_sensorium.recording.ros1.web_service import (  # noqa: E402
+    build_recording_service,
     RecordingService,
     create_app,
 )
@@ -61,7 +62,7 @@ def service_factory(ros_node, tmp_path):
             stereo=StereoViewConfig(mode="duplicate") if stereo else None,
             generation=generation,
         )
-        service = RecordingService(config=config)
+        service = build_recording_service(config=config)
         services.append(service)
         return service
 
