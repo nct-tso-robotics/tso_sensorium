@@ -17,13 +17,26 @@ Processing, episode assembly, and export have no ROS dependency and run anywhere
 
 ## Installation
 
+### With pip
+
 ```bash
 pip install -e .              # core: processing, episodes, export
+pip install -e ".[gui]"       # + browser dashboard (Flask)
 pip install -e ".[lerobot]"   # + LeRobot dataset export (Python >= 3.10)
 pip install -e ".[test]"      # + pytest
 ```
 
-The ROS client libraries (`rospy`, `rclpy`) are not on PyPI, so there is no pip extra for recording: on a robot they come from the ROS installation itself (apt), and for development without a robot the [RoboStack](https://robostack.github.io/) conda environments in `environments/` provide them:
+Python requirements: the core library runs on Python 3.8+, the config
+modules and scripts need 3.9+ (pydantic), and LeRobot export needs 3.10+.
+Extras combine as usual, e.g. `pip install -e ".[gui,test]"`.
+
+### ROS environments (recording)
+
+The ROS client libraries (`rospy`, `rclpy`) are not on PyPI, so there is
+no pip extra for recording. On a robot they come from the ROS
+installation itself (apt); for development without a robot, the
+[RoboStack](https://robostack.github.io/) conda environments in
+`environments/` provide them:
 
 ```bash
 mamba env create -f environments/ros1-noetic.yml   # or ros2-jazzy.yml
@@ -31,7 +44,27 @@ mamba activate tso-sensorium-ros1
 pip install -e . --no-deps                          # deps already come from conda
 ```
 
-Note: the Noetic robot PC runs Python 3.8 and the LeRobot exporter needs Python 3.10+, so recording and LeRobot export are not meant to share one environment. Record on the robot, export on the processing machine.
+Note: the Noetic robot PC runs Python 3.8 and the LeRobot exporter needs
+Python 3.10+, so recording and LeRobot export are not meant to share one
+environment. Record on the robot, export on the processing machine.
+
+### With pixi (reproducible environments)
+
+The same environments are declared in `pyproject.toml` under
+`[tool.pixi]`, with the exact solve locked in `pixi.lock`. After
+[installing pixi](https://pixi.sh), environments are created on first use
+and the package is installed in editable mode automatically:
+
+```bash
+pixi run test                     # unit tests in the default env
+pixi run -e ros1 python -m ...    # any command inside the ROS 1 env
+pixi run -e ros2 python -m ...    # or the ROS 2 env
+```
+
+On machines with a small home quota, point the package cache at larger
+storage first: `export PIXI_CACHE_DIR=/path/with/space`. LeRobot export
+intentionally stays a pip extra rather than a pixi environment, to avoid
+duplicating a multi-gigabyte torch install per checkout.
 
 ## User guide
 
@@ -89,7 +122,6 @@ For interactive sessions, `record_service` keeps a recording service running
 and serves a browser dashboard (requires the `gui` extra):
 
 ```bash
-pip install -e ".[gui]"
 python -m tso_sensorium.scripts.record_service \
     --config_path configs/recording/tso_testbed_service.yaml \
     --session.output_folder /data/recordings
@@ -223,29 +255,17 @@ left, right = rectifier.rectify(left=left, right=right)
 ## Development
 
 ```bash
-pip install -e ".[test]"
 pytest                 # unit tests
 pytest -m ""           # all tests, including integration
 ruff format tso_sensorium/ tests/ && ruff check tso_sensorium/ tests/
 ```
 
-The ROS adapter tests skip unless the corresponding ROS client library is importable. The RoboStack environments in `environments/` make them runnable without a robot:
+Or through the pixi tasks: `pixi run test`, `pixi run test-all`,
+`pixi run lint`. The ROS adapter tests skip unless the corresponding ROS
+client library is importable — run them inside a ROS environment from the
+installation section:
 
 ```bash
-mamba env create -f environments/ros1-noetic.yml   # or ros2-jazzy.yml
-mamba run -n tso-sensorium-ros1 python -m pytest tests/recording/ -m ""
-```
-
-### Pixi
-
-The same environments are also declared in `pyproject.toml` under `[tool.pixi]`, with the exact solve locked in `pixi.lock`. After [installing pixi](https://pixi.sh):
-
-```bash
-pixi run test                                    # unit tests, default env
-pixi run test-all                                # including integration tests
-pixi run lint
 pixi run -e ros1 pytest tests/recording -m ""    # ROS 1 adapter tests
 pixi run -e ros2 pytest tests/recording -m ""    # ROS 2 adapter tests
 ```
-
-Pixi creates the environments on first use and installs the package in editable mode automatically. On machines with a small home quota, point the package cache at larger storage first: `export PIXI_CACHE_DIR=/path/with/space`. LeRobot export intentionally stays a pip extra rather than a pixi environment, to avoid duplicating a multi-gigabyte torch install per checkout.
