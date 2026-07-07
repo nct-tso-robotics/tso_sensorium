@@ -69,10 +69,15 @@ class TimestampedCsvRecorder:
     def write_row(self, timestamp_nanoseconds: int, values: Sequence[Any]) -> None:
         """Append one row with its timestamp.
 
+        Rows arriving after ``close`` are dropped: subscription callbacks
+        can still fire while a recording is being stopped.
+
         Args:
             timestamp_nanoseconds: Acquisition time of the values.
             values: Row values in header order.
         """
+        if self._csv_file.closed:
+            return
         self._csv_writer.writerow([timestamp_nanoseconds] + list(values))
 
     def close(self) -> None:

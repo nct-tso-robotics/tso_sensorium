@@ -46,8 +46,10 @@ class TestTimestampedCsvRecorder:
     @pytest.mark.unit
     def test_write_row_prepends_timestamp(self):
         csv_writer = MagicMock()
+        opened = mock_open()
+        opened.return_value.closed = False
         with (
-            patch("builtins.open", mock_open()),
+            patch("builtins.open", opened),
             patch(CSV_WRITER_PATH, return_value=csv_writer),
         ):
             recorder = TimestampedCsvRecorder(
@@ -55,6 +57,15 @@ class TestTimestampedCsvRecorder:
             )
             recorder.write_row(timestamp_nanoseconds=123, values=[1.5])
         csv_writer.writerow.assert_called_with([123, 1.5])
+
+    @pytest.mark.unit
+    def test_rows_after_close_are_dropped(self, tmp_path):
+        recorder = TimestampedCsvRecorder(
+            output_folder=tmp_path, file_name="state", csv_header=["x"]
+        )
+        recorder.close()
+        recorder.write_row(timestamp_nanoseconds=123, values=[1.5])
+        assert (tmp_path / "state.csv").read_text().strip() == "time,x"
 
     @pytest.mark.unit
     def test_close_closes_file(self):
