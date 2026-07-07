@@ -1,0 +1,33 @@
+# Sequential phase labeling for bowel retraction episodes. Runs on the
+# generated episode.csv (the camera-frame columns exist after a CSV
+# generation): generate -> label -> regenerate with annotations.
+recordings_root: ""
+state_file: episode.csv
+sync_column: time
+labeler:
+  type: sequential_trigger
+  phases:
+    - phase: 0  # wait_for_grasp_target
+      trigger: {type: column_threshold, column: open, threshold: 0.5, above: true}
+    - phase: 1  # approach_and_open
+      trigger: {type: column_threshold, column: open, threshold: 0.5, above: false}
+    - phase: 2  # grasp_and_hold
+      trigger:
+        type: movement
+        columns:
+          - camera_frame_tip_position_x
+          - camera_frame_tip_position_y
+          - camera_frame_tip_position_z
+        epsilon: 0.001
+        above: true
+    - phase: 3  # retract
+      trigger:
+        type: movement
+        columns:
+          - camera_frame_tip_position_x
+          - camera_frame_tip_position_y
+          - camera_frame_tip_position_z
+        epsilon: 0.0001
+        above: false
+    - phase: 4  # hold_completed
+      trigger: null

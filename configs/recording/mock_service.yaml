@@ -1,0 +1,27 @@
+# Recording dashboard against the synthetic sensors from
+# tso_sensorium.scripts.mock_sensors — try the full record/browse/replay/
+# generate loop without a robot.
+host: 0.0.0.0
+port: 8080
+camera_topic: /mock/camera
+staleness_seconds: 1.0
+
+session:
+  output_folder: /tmp/tso_sensorium_mock
+  recorders:
+    - type: video
+      file_name: camera
+      topic_name: /mock/camera
+      frames_per_second: 15
+    - type: topic
+      file_name: pose
+      topic_name: /mock/pose
+      message_type: geometry_msgs.msg.PoseStamped
+      fields: [pose.position.x, pose.position.y, pose.position.z]
+    - type: topic
+      file_name: gripper
+      topic_name: /mock/gripper
+      message_type: std_msgs.msg.Bool
+      fields: [data]
+
+generation: !include ../dataset/mock.yaml

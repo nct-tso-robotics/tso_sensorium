@@ -1,0 +1,43 @@
+# Dataset generation for the mock recordings.
+save_frames: true
+n_jobs: 2
+max_sync_difference_seconds: 0.25
+annotations:
+  legend:
+    dataset_name: mock
+    task: mock demonstration
+    phase_legend:
+      0:
+        name: left_half
+        instructions: [move the tool to the left side]
+      1:
+        name: right_half
+        instructions:
+          - move the tool to the right side
+          - push the tool rightwards
+  metadata_file: dataset_metadata.json
+schema:
+  name: mock
+  fps: 15
+  task: mock demonstration
+  cameras:
+    - name: camera
+      frame_column: framePath
+      height: 540
+      width: 960
+  arms:
+    - name: tool
+      state_columns: [pose_position_x, pose_position_y, pose_position_z]
+      action_columns: [pose_position_x, pose_position_y, pose_position_z]
+videos:
+  - video_file: camera.mp4
+    timestamps_file: camera.csv
+    frame_column: framePath
+    frames_directory: frames
+states:
+  - state_file: pose.csv
+    columns: [pose_position_x, pose_position_y, pose_position_z]
+  - state_file: gripper.csv
+    columns: [data]
+writer:
+  type: csv

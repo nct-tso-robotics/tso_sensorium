@@ -1,0 +1,181 @@
+"""Tests for tso_sensorium.episodes.builder module."""
+
+from unittest.mock import MagicMock, patch
+
+import pandas as pd
+import pytest
+
+from tso_sensorium.episodes.builder import (
+    DEFAULT_MAX_SYNC_DIFFERENCE_SECONDS,
+    EpisodeGenerator,
+)
+
+STATE_DATA_PATH = "tso_sensorium.episodes.builder.StateData"
+VIDEO_DATA_PATH = "tso_sensorium.episodes.builder.VideoData"
+
+
+@pytest.fixture
+def generated_episode_factory():
+    def factory(dataframe: pd.DataFrame) -> EpisodeGenerator:
+        generator = EpisodeGenerator()
+        generator.dataset = dataframe
+        return generator
+
+    return factory
+
+
+class TestSourceRegistration:
+    @pytest.mark.unit
+    def test_add_state_registers_state_source_with_configuration(self):
+        generator = EpisodeGenerator()
+        with patch(STATE_DATA_PATH) as state_data_class:
+            chained = generator.add_state(
+                state_data_path="state.csv",
+                sync_col_name="timestamp",
+                dataset_cols=["x", "y"],
+            )
+        state_data_class.assert_called_once_with(
+            state_data_path="state.csv",
+            sync_col_name="timestamp",
+            dataset_cols=["x", "y"],
+            max_sync_difference_seconds=DEFAULT_MAX_SYNC_DIFFERENCE_SECONDS,
+        )
+        assert generator.data == [state_data_class.return_value]
+        assert chained is generator
+
+    @pytest.mark.unit
+    def test_add_video_registers_video_source_with_configuration(self):
+        generator = EpisodeGenerator()
+        preprocess_fn = MagicMock()
+        with patch(VIDEO_DATA_PATH) as video_data_class:
+            chained = generator.add_video(
+                video_path="left.mp4",
+                timestamps_path="timestamps.csv",
+                sync_col_name="timestamp",
+                frames_output_path="frames",
+                frame_col_name="left_frame",
+                preprocess_fn=preprocess_fn,
+                save_frames=True,
+            )
+        video_data_class.assert_called_once_with(
+            video_path="left.mp4",
+            timestamps_path="timestamps.csv",
+            sync_col_name="timestamp",
+            frames_output_path="frames",
+            frame_col_name="left_frame",
+            preprocess_fn=preprocess_fn,
+            save_frames=True,
+            max_sync_difference_seconds=DEFAULT_MAX_SYNC_DIFFERENCE_SECONDS,
+        )
+        assert generator.data == [video_data_class.return_value]
+        assert chained is generator
+
+
+class TestGenerateDataset:
+    @pytest.mark.unit
+    def test_aligns_all_sources_on_first_source_timestamps(self):
+        sync_series = pd.Series([0, 10])
+        first_source = MagicMock()
+        first_source.sync_col_name = "time"
+        first_source.get_sync_col_data.return_value = sync_series
+        first_source.get_data.return_value = pd.DataFrame({"a": [1, 2]})
+        second_source = MagicMock()
+        second_source.get_data.return_value = pd.DataFrame({"b": [3, 4]})
+        generator = EpisodeGenerator()
+        generator.data = [first_source, second_source]
+
+        generator.generate_dataset()
+
+        second_source.get_sync_col_data.assert_not_called()
+        first_sync = first_source.get_data.call_args.kwargs["source_sync_dataframe"]
+        second_sync = second_source.get_data.call_args.kwargs["source_sync_dataframe"]
+        assert first_sync is sync_series
+        assert second_sync is sync_series
+        pd.testing.assert_frame_equal(
+            generator.dataset,
+            pd.DataFrame({"time": [0, 10], "a": [1, 2], "b": [3, 4]}),
+        )
+
+
+class TestColumnOperations:
+    @pytest.mark.unit
+    def test_apply_function_single_column(self, generated_episode_factory):
+        generator = generated_episode_factory(pd.DataFrame({"a": [1, 2]}))
+        generator.apply_function(
+            col_name="a", new_col_name="doubled", function=lambda value: 2 * value
+        )
+        assert generator.dataset["doubled"].tolist() == [2, 4]
+
+    @pytest.mark.unit
+    def test_apply_function_multiple_columns(self, generated_episode_factory):
+        generator = generated_episode_factory(
+            pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+        )
+        generator.apply_function(
+            col_name=["a", "b"],
+            new_col_name=["total", "difference"],
+            function=lambda a, b: (a + b, a - b),
+        )
+        assert generator.dataset["total"].tolist() == [4.0, 6.0]
+        assert generator.dataset["difference"].tolist() == [-2.0, -2.0]
+
+    @pytest.mark.unit
+    def test_apply_function_rejects_mismatched_name_types(
+        self, generated_episode_factory
+    ):
+        generator = generated_episode_factory(pd.DataFrame({"a": [1]}))
+        with pytest.raises(
+            TypeError,
+            match=(
+                "`col_name` and `new_col_name` must either both be strings"
+                " or both be lists/tuples of the same length."
+            ),
+        ):
+            generator.apply_function(
+                col_name=1, new_col_name=2, function=lambda value: value
+            )
+
+    @pytest.mark.unit
+    def test_drop_add_and_rename_columns(self, generated_episode_factory):
+        generator = generated_episode_factory(pd.DataFrame({"a": [1, 2], "b": [3, 4]}))
+        generator.drop_columns(col_names=["b"])
+        generator.add_columns(col_names="phase", col_values=[0, 1])
+        generator.rename_columns(col_names=["a"], new_col_names=["position"])
+        pd.testing.assert_frame_equal(
+            generator.dataset,
+            pd.DataFrame({"position": [1, 2], "phase": [0, 1]}),
+        )
+
+    @pytest.mark.unit
+    def test_get_number_of_rows(self, generated_episode_factory):
+        generator = generated_episode_factory(pd.DataFrame({"a": [1, 2, 3]}))
+        assert generator.get_number_of_rows() == 3
+
+    @pytest.mark.unit
+    def test_save_dataset_writes_csv_without_index(self):
+        generator = EpisodeGenerator()
+        generator.dataset = MagicMock()
+        generator.save_dataset(path="episode.csv")
+        generator.dataset.to_csv.assert_called_once_with("episode.csv", index=False)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda generator: generator.apply_function(
+            col_name="a", new_col_name="b", function=abs
+        ),
+        lambda generator: generator.drop_columns(col_names=["a"]),
+        lambda generator: generator.add_columns(col_names="a", col_values=[1]),
+        lambda generator: generator.get_number_of_rows(),
+        lambda generator: generator.rename_columns(
+            col_names=["a"], new_col_names=["b"]
+        ),
+        lambda generator: generator.show_dataset(),
+        lambda generator: generator.save_dataset(path="episode.csv"),
+    ],
+)
+def test_operations_raise_before_generation(operation):
+    with pytest.raises(ValueError, match="Dataset is not generated yet"):
+        operation(EpisodeGenerator())

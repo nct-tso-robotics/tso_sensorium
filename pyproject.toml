@@ -1,0 +1,156 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tso-sensorium"
+version = "0.1.0"
+description = "Sensor data recording, post-processing, and episodic dataset creation for robot learning"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Lorenzo Mazza", email = "lorenzo.mazza@nct-dresden.de" },
+    { name = "Ariel Rodriguez", email = "ariel.rodriguezjimenez@nct-dresden.de" },
+]
+maintainers = [
+    { name = "Lorenzo Mazza", email = "lorenzo.mazza@nct-dresden.de" },
+    { name = "Ariel Rodriguez", email = "ariel.rodriguezjimenez@nct-dresden.de" },
+]
+keywords = ["robotics", "imitation-learning", "dataset", "recording", "ros"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Robotics",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.19.0",
+    "opencv-python>=4.5.0",
+    "pandas>=1.3.0",
+    "scipy>=1.7.0",
+    "joblib>=1.1.0",
+    "tqdm>=4.62.0",
+    "importlib_resources; python_version < '3.9'",
+    # Config modules and scripts need pydantic; the core library stays
+    # importable on Python 3.8 without it.
+    "pydantic>=2.7; python_version >= '3.9'",
+    "pyyaml-include>=1.3,<2.0; python_version >= '3.9'",
+]
+
+[project.optional-dependencies]
+# ROS client libraries are not on PyPI: recording adapters get them from the
+# ROS installation itself (apt on the robot) or from the RoboStack conda
+# environments in environments/.
+lerobot = [
+    # Writes LeRobot dataset format v3.0 via the 0.4.4+ writer API
+    # (add_frame with in-frame task, finalize). Needs Python >= 3.10.
+    "lerobot>=0.4.4",
+]
+gui = [
+    # Browser dashboard for the recording service.
+    "flask>=3.0",
+]
+test = [
+    "pytest>=8.0",
+]
+
+[project.urls]
+Repository = "https://github.com/nct-tso-robotics/tso_sensorium"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tso_sensorium*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.xml", "*.yml", "*.yaml", "*.json", "*.html"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: Fast unit tests with mocked dependencies (deselect with '-m \"not unit\"')",
+    "integration: Slower tests with real IO or real component composition (deselect with '-m \"not integration\"')",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.ruff]
+line-length = 88
+# The package must stay importable on the ROS 1 Noetic robot PC (Python 3.8);
+# tests only run on modern processing machines.
+target-version = "py38"
+
+[tool.ruff.per-file-target-version]
+"tests/**" = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.10,<3.14"
+numpy = ">=1.19"
+opencv = "*"
+pandas = ">=1.3"
+scipy = ">=1.7"
+joblib = ">=1.1"
+tqdm = ">=4.62"
+
+[tool.pixi.pypi-dependencies]
+tso-sensorium = { path = ".", editable = true }
+
+[tool.pixi.feature.test.dependencies]
+pytest = ">=8"
+ruff = "*"
+
+[tool.pixi.feature.ros1]
+channels = ["robostack-staging"]
+
+[tool.pixi.feature.ros1.dependencies]
+python = "3.11.*"
+flask = ">=3"
+ros-noetic-rospy = "*"
+ros-noetic-sensor-msgs = "*"
+ros-noetic-std-msgs = "*"
+ros-noetic-geometry-msgs = "*"
+ros-noetic-cv-bridge = "*"
+ros-noetic-ros-core = "*"
+
+[tool.pixi.feature.ros2]
+channels = ["robostack-jazzy"]
+
+[tool.pixi.feature.ros2.dependencies]
+ros-jazzy-rclpy = "*"
+ros-jazzy-sensor-msgs = "*"
+ros-jazzy-std-msgs = "*"
+ros-jazzy-geometry-msgs = "*"
+
+[tool.pixi.environments]
+default = ["test"]
+ros1 = ["ros1", "test"]
+ros2 = ["ros2", "test"]
+
+[tool.pixi.tasks]
+test = "pytest"
+test-all = "pytest -m ''"
+lint = "ruff format --check tso_sensorium/ tests/ && ruff check tso_sensorium/ tests/"

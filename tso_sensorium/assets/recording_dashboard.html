@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TSO Sensorium</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0f1e;
+    --panel: #111a2ec9;
+    --panel-raised: #1a2540;
+    --border: #26365a;
+    --text: #eceff7;
+    --muted: #8da0bf;
+    --red: #e5484d;
+    --red-soft: #e5484d33;
+    --green: #46a758;
+    --green-soft: #46a75833;
+    --amber: #f5a524;
+    --accent: #6ea8ff;
+    --gold: #d8b26a;
+    --radius: 16px;
+    --display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --font: "Inter", "SF Pro Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--text); font-family: var(--display); font-size: 14.5px;
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(1100px 560px at 82% -12%, #1c2c55b8, transparent 65%),
+      radial-gradient(900px 520px at -8% 112%, #14224377, transparent 60%),
+      var(--bg);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 22px; padding: 16px 28px;
+    background: linear-gradient(180deg, #16213dd9, #0d1529d9);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 20px; letter-spacing: 0.03em; font-family: var(--display); }
+  .brand .logo { width: 28px; height: 28px; border-radius: 9px; background: radial-gradient(circle at 35% 35%, #ff6b6f, var(--red) 70%); box-shadow: 0 0 16px var(--red-soft); }
+  #timer { font-family: var(--mono); font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; color: var(--muted); }
+  #timer.live { color: var(--text); }
+  .status-pill { display: flex; align-items: center; gap: 8px; padding: 5px 15px; border-radius: 999px; font-size: 11.5px; font-weight: 600; font-family: var(--font); text-transform: uppercase; letter-spacing: 0.12em; background: var(--panel-raised); border: 1px solid var(--border); color: var(--muted); }
+  .status-pill .led { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .status-pill.recording { color: #ffd7d9; background: var(--red-soft); border-color: var(--red); }
+  .status-pill.recording .led { background: var(--red); animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  .meta { margin-left: auto; text-align: right; color: var(--muted); font-size: 12px; line-height: 1.55; font-family: var(--font); }
+  .meta b { color: var(--text); font-weight: 600; }
+  #nav { display: flex; gap: 4px; background: #0a0f1eaa; border: 1px solid var(--border); border-radius: 999px; padding: 4px; }
+  #nav button { border: 1px solid transparent; background: transparent; color: var(--muted); font-size: 14px; font-family: var(--display); padding: 7px 20px; border-radius: 999px; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+  #nav button:hover { color: var(--text); }
+  #nav button.active { background: var(--panel-raised); color: var(--gold); border-color: #d8b26a55; }
+  .view-hidden { display: none !important; }
+
+  main { display: grid; grid-template-columns: minmax(400px, 5fr) minmax(300px, 3fr); gap: 20px; padding: 22px 28px; max-width: 1500px; margin: 0 auto; }
+  main.single { grid-template-columns: 1fr; max-width: 1100px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; backdrop-filter: blur(6px); box-shadow: 0 22px 44px #05081266;
+  }
+  .card + .card { margin-top: 20px; }
+  .card h2 {
+    margin: 0; padding: 13px 18px; font-size: 15.5px; font-weight: 600; font-family: var(--display);
+    letter-spacing: 0.02em; color: var(--text); border-bottom: 1px solid var(--border);
+    background: linear-gradient(90deg, #d8b26a14, transparent 55%);
+  }
+  .card .body { padding: 16px 18px; }
+  .card-desc { color: var(--muted); font-size: 12.5px; font-family: var(--font); line-height: 1.55; padding: 0 0 12px; }
+
+  .stage { position: relative; background: #000; aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center; }
+  .stage img { width: 100%; height: 100%; object-fit: contain; }
+  .stage .placeholder { color: var(--muted); font-size: 13px; font-family: var(--font); }
+  .rec-badge {
+    position: absolute; top: 12px; left: 12px; display: none; align-items: center; gap: 7px;
+    background: #000000aa; backdrop-filter: blur(4px); padding: 5px 12px; border-radius: 999px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; color: #ff8589;
+  }
+  .rec-badge .led { width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); animation: blink 1s steps(2, start) infinite; }
+
+  .transport { display: flex; align-items: center; gap: 16px; padding: 15px 18px; border-top: 1px solid var(--border); background: #1a254088; }
+  #episode-name { flex: 1; background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); padding: 10px 13px; border-radius: 10px; font-family: var(--mono); font-size: 13px; }
+  #episode-name:focus { outline: none; border-color: var(--gold); }
+  .record-button {
+    width: 58px; height: 58px; border-radius: 50%; border: 3px solid #35415e; background: var(--panel-raised);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; transition: border-color 0.15s;
+    flex-shrink: 0; padding: 0;
+  }
+  .record-button:hover { border-color: var(--red); }
+  .record-button .core { width: 34px; height: 34px; border-radius: 50%; background: var(--red); transition: all 0.18s ease; box-shadow: 0 0 12px var(--red-soft); }
+  .record-button.recording .core { width: 22px; height: 22px; border-radius: 5px; animation: blink 1.4s steps(2, start) infinite; }
+  .record-button:disabled { opacity: 0.5; cursor: default; }
+  .hint { color: var(--muted); font-size: 12px; font-family: var(--font); }
+  .field-label { color: var(--muted); font-size: 11px; font-family: var(--font); margin: 0 0 5px 2px; letter-spacing: 0.03em; }
+
+  .sensors { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .sensor {
+    display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 11px;
+    background: var(--panel-raised); border: 1px solid var(--border); cursor: pointer; user-select: none;
+    transition: border-color 0.15s, opacity 0.15s;
+  }
+  .sensor input { display: none; }
+  .sensor.off { opacity: 0.45; }
+  .sensor .led { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; background: #3d4a68; }
+  .sensor .led.alive { background: var(--green); box-shadow: 0 0 9px var(--green-soft), 0 0 3px var(--green); }
+  .sensor .led.stale { background: var(--red); box-shadow: 0 0 7px var(--red-soft); }
+  .sensor .name { font-weight: 600; font-size: 13px; font-family: var(--font); }
+  .sensor .topic { color: var(--muted); font-size: 11px; font-family: var(--mono); display: block; margin-top: 1px; word-break: break-all; }
+
+  .episode { border-bottom: 1px solid var(--border); }
+  .episode:last-child { border-bottom: none; }
+  .episode-header { display: flex; align-items: center; gap: 10px; padding: 12px 18px; cursor: pointer; }
+  .episode-header:hover { background: #1a254066; }
+  .episode-header .chevron { color: var(--muted); font-size: 10px; transition: transform 0.15s; }
+  .episode.open .chevron { transform: rotate(90deg); }
+  .episode-header .name { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .episode-header .when { margin-left: auto; color: var(--muted); font-size: 11px; font-family: var(--font); }
+  .episode-header a.annotate { color: var(--gold); text-decoration: none; font-size: 14px; }
+  .files { display: none; padding: 4px 18px 13px 38px; }
+  .episode.open .files { display: block; }
+  .file { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+  .file .fname { font-family: var(--mono); color: var(--text); }
+  .file .size { color: var(--muted); font-size: 11px; font-family: var(--font); }
+  .file a { color: var(--accent); text-decoration: none; margin-left: auto; font-family: var(--font); }
+  .file a.play { margin-left: 10px; color: var(--green); font-weight: 600; }
+  #player-card { display: none; }
+  #player { width: 100%; display: block; background: #000; }
+  .empty { padding: 18px; color: var(--muted); font-size: 13px; font-family: var(--font); }
+  .library-actions { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  #generate { background: var(--panel-raised); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 8px 18px; font-size: 13.5px; font-family: var(--display); cursor: pointer; transition: border-color 0.15s; }
+  #generate:hover { border-color: var(--gold); color: var(--gold); }
+  #generate:disabled { opacity: 0.45; cursor: default; }
+  #generation-status.running { color: var(--amber); }
+  #generation-status.done { color: var(--green); }
+  #generation-status.failed { color: var(--red); }
+  .gen-option { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; font-family: var(--font); }
+  .gen-option select, .gen-option input[type=number] { background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 4px 6px; font-size: 12px; width: auto; font-family: var(--font); }
+  .gen-option input[type=number] { width: 64px; }
+  #gen-output-root { background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 4px 8px; font-size: 12px; font-family: var(--mono); flex: 1; min-width: 140px; }
+  #generation-failures { padding: 8px 18px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); font-family: var(--font); }
+  #generation-failures .reason { padding: 2px 0; }
+  #generation-failures .reason b { color: #ff8589; font-family: var(--mono); font-weight: 600; }
+
+  /* Legend editor */
+  .legend-head { display: flex; gap: 12px; padding: 0 0 12px; }
+  .legend-head .field { flex: 1; }
+  .legend-head .field:last-child { flex: 2; }
+  .legend-head input { background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 11px; font-size: 13px; width: 100%; font-family: var(--font); }
+  .legend-head input:focus { outline: none; border-color: var(--gold); }
+  .legend-row { display: grid; grid-template-columns: 56px 170px 1fr 30px; gap: 9px; align-items: start; padding: 5px 0; }
+  .legend-row.header { padding: 6px 0 3px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .legend-row.header .col-label { color: var(--gold); font-size: 10.5px; font-family: var(--font); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; }
+  .legend-row input, .legend-row textarea { background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 9px; font-size: 12.5px; width: 100%; font-family: var(--font); }
+  .legend-row textarea { min-height: 36px; resize: vertical; line-height: 1.45; }
+  .legend-row .label-input { font-family: var(--mono); text-align: center; }
+  .legend-row .remove { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding-top: 7px; }
+  .legend-row .remove:hover { color: var(--red); }
+  #root-card .row { display: flex; gap: 8px; }
+  #root-card input { background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 11px; font-size: 12.5px; flex: 1; font-family: var(--mono); }
+  #root-card input:focus { outline: none; border-color: var(--gold); }
+
+  /* Annotation editor */
+  #annotator-card { display: none; }
+  #ann-video { width: 100%; display: block; background: #000; }
+  .ann-timeline-wrap { padding: 15px 18px; }
+  #ann-timeline { position: relative; height: 48px; border-radius: 10px; background: #0a0f1ecc; border: 1px solid var(--border); overflow: hidden; cursor: crosshair; user-select: none; }
+  .ann-segment { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-family: var(--font); color: #0a0f1e; overflow: hidden; white-space: nowrap; }
+  .ann-segment.manual { box-shadow: inset 0 -3px 0 #ffffffcc; }
+  .ann-segment.selected { outline: 2px solid #fff; outline-offset: -2px; z-index: 2; }
+  .ann-edge { position: absolute; top: 0; bottom: 0; width: 9px; cursor: ew-resize; z-index: 3; }
+  #ann-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; z-index: 4; pointer-events: none; box-shadow: 0 0 6px #ffffffaa; }
+  .ann-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 0 18px 15px; }
+  .ann-controls input[type=text] { background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-family: var(--font); }
+  #ann-phase { width: 230px; font-family: var(--font); background: #0a0f1ecc; border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; }
+  #ann-instruction-preview { color: var(--muted); font-size: 11.5px; font-family: var(--font); flex: 1; min-width: 160px; }
+  .ann-button { background: var(--panel-raised); border: 1px solid var(--border); color: var(--text); border-radius: 999px; padding: 8px 16px; font-size: 13px; font-family: var(--display); cursor: pointer; transition: border-color 0.15s, color 0.15s; }
+  .ann-button:hover { border-color: var(--gold); color: var(--gold); }
+  .ann-button.primary { background: #2e7d43; border-color: #2e7d43; color: white; }
+  .ann-button.primary:hover { border-color: #46a758; color: white; }
+  .ann-button.danger:hover { border-color: var(--red); color: #ff8589; }
+  .ann-legend { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 18px 12px; font-size: 11.5px; color: var(--muted); font-family: var(--font); }
+  .ann-legend .chip { display: flex; align-items: center; gap: 5px; }
+  .ann-legend .swatch { width: 11px; height: 11px; border-radius: 3px; }
+  #ann-hint { padding: 0 18px 13px; color: var(--muted); font-size: 11.5px; font-family: var(--font); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo"></div>TSO Sensorium</div>
+  <nav id="nav">
+    <button data-view="record" class="active">&#9210; Record</button>
+    <button data-view="library">&#128451; Library</button>
+  </nav>
+  <div id="status" class="status-pill"><span class="led"></span><span id="status-text">idle</span></div>
+  <div id="timer">00:00</div>
+  <div class="meta"><b id="episode-label"></b><br><span id="disk"></span></div>
+</header>
+<main>
+  <div id="view-record">
+    <div class="card">
+      <div class="stage">
+        <img id="feed" alt="">
+        <div class="placeholder" id="feed-missing" hidden>No camera feed configured</div>
+        <div class="rec-badge" id="rec-badge"><span class="led"></span>REC</div>
+      </div>
+      <div class="transport">
+        <button class="record-button" id="record" title="Start / stop demonstration"><span class="core"></span></button>
+        <input type="text" id="episode-name" placeholder="episode name — blank for timestamp" spellcheck="false">
+        <span class="hint" id="hint">Ready</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Sensors</h2>
+      <div class="body sensors" id="sensors"></div>
+    </div>
+  </div>
+  <div id="view-library">
+    <div class="card view-hidden" id="root-card">
+      <h2>Recordings Folder</h2>
+      <div class="body">
+        <div class="field-label">Absolute path on the server containing one folder per recorded episode</div>
+        <div class="row">
+          <input type="text" id="library-root" placeholder="/data/recordings">
+          <button class="ann-button" id="root-scan">Scan</button>
+        </div>
+        <span class="hint" id="root-hint"></span>
+      </div>
+    </div>
+    <div class="card" id="legend-card">
+      <h2>Dataset &amp; Phase Legend</h2>
+      <div class="body">
+        <div class="card-desc">The legend defines the integer phase labels written into generated datasets: each label maps to a phase name and the language instruction(s) associated with it. The annotator only offers phases defined here, and the whole legend is saved to <b>dataset_metadata.json</b> at the recordings root.</div>
+        <div class="legend-head">
+          <div class="field">
+            <div class="field-label">Dataset name &mdash; identifier stored in dataset_metadata.json</div>
+            <input type="text" id="legend-dataset" placeholder="e.g. bowel_retraction">
+          </div>
+          <div class="field">
+            <div class="field-label">Task &mdash; one-line description of what the demonstrations show</div>
+            <input type="text" id="legend-task" placeholder="e.g. retract the bowel and hold it steady">
+          </div>
+        </div>
+        <div class="legend-row header">
+          <div class="col-label">Label</div>
+          <div class="col-label">Phase name</div>
+          <div class="col-label">Language instructions &mdash; one per line; with several lines, one is sampled per episode</div>
+          <div></div>
+        </div>
+        <div id="legend-rows"></div>
+        <div class="controls" style="margin-top:10px">
+          <button class="ann-button" id="legend-add">+ phase</button>
+          <button class="ann-button primary" id="legend-save">Save legend</button>
+          <span class="hint" id="legend-hint"></span>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="annotator-card">
+      <h2>Annotate — <span id="ann-episode"></span></h2>
+      <video id="ann-video" controls></video>
+      <div class="ann-timeline-wrap"><div id="ann-timeline"><div id="ann-playhead"></div></div></div>
+      <div class="ann-legend" id="ann-legend"></div>
+      <div class="ann-controls">
+        <select id="ann-phase" disabled></select>
+        <span id="ann-instruction-preview"></span>
+        <button class="ann-button" id="ann-split">&#9986; Split at playhead</button>
+        <button class="ann-button danger" id="ann-delete" disabled>Delete</button>
+        <button class="ann-button primary" id="ann-save">Save</button>
+        <button class="ann-button" id="ann-close">Close</button>
+      </div>
+      <div id="ann-hint">Click the timeline to seek and select · drag segment edges to move boundaries · edited segments become manual.</div>
+    </div>
+    <div class="card" id="player-card">
+      <h2>Replay</h2>
+      <video id="player" controls></video>
+    </div>
+    <div class="card">
+      <h2>Library</h2>
+      <div class="library-actions">
+        <button id="generate" hidden>&#9881; Generate dataset</button>
+        <label class="gen-option"><input type="checkbox" id="gen-frames"> extract frames</label>
+        <label class="gen-option">format
+          <select id="gen-format"><option value="csv">csv</option><option value="lerobot">lerobot</option></select>
+        </label>
+        <label class="gen-option">sync tol (s)
+          <input type="number" id="gen-tolerance" step="0.05" min="0" placeholder="0.1">
+        </label>
+        <input type="text" id="gen-output-root" placeholder="output root (lerobot)" hidden>
+        <span class="hint" id="generation-status"></span>
+      </div>
+      <div id="generation-failures" hidden></div>
+      <div id="episodes"><div class="empty">No episodes yet.</div></div>
+    </div>
+  </div>
+</main>
+<script>
+const state = { recording: false, sensors: [], deselected: new Set(), rootSeeded: false, legend: { dataset_name: "", task: "", phase_legend: {} } };
+
+function phaseName(label) {
+  const entry = state.legend.phase_legend[String(label)];
+  return entry && entry.name ? entry.name : `phase ${label}`;
+}
+
+function switchView(view) {
+  document.getElementById("view-record").classList.toggle("view-hidden", view !== "record");
+  document.getElementById("view-library").classList.toggle("view-hidden", view !== "library");
+  document.querySelector("main").classList.add("single");
+  for (const button of document.querySelectorAll("#nav button")) {
+    button.classList.toggle("active", button.dataset.view === view);
+  }
+}
+for (const button of document.querySelectorAll("#nav button")) {
+  button.addEventListener("click", () => switchView(button.dataset.view));
+}
+switchView("record");
+
+function formatElapsed(totalSeconds) {
+  if (totalSeconds === null || totalSeconds === undefined) return "00:00";
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60);
+  return String(minutes).padStart(2, "0") + ":" + String(seconds).padStart(2, "0");
+}
+
+function renderSensors() {
+  const grid = document.getElementById("sensors");
+  grid.innerHTML = "";
+  for (const sensor of state.sensors) {
+    const selected = !state.deselected.has(sensor.name);
+    const ledClass = sensor.alive ? "alive" : (sensor.last_message_age === null ? "" : "stale");
+    const tile = document.createElement("label");
+    tile.className = "sensor" + (selected ? "" : " off");
+    tile.innerHTML =
+      `<input type="checkbox" ${selected ? "checked" : ""} ${state.recording ? "disabled" : ""}>` +
+      `<span class="led ${ledClass}"></span>` +
+      `<span><span class="name">${sensor.name}</span><span class="topic">${sensor.topic}</span></span>`;
+    tile.querySelector("input").addEventListener("change", (event) => {
+      if (event.target.checked) state.deselected.delete(sensor.name);
+      else state.deselected.add(sensor.name);
+      renderSensors();
+    });
+    grid.appendChild(tile);
+  }
+}
+
+async function refreshStatus() {
+  const response = await fetch("/api/status");
+  const status = await response.json();
+  state.recording = status.state === "recording";
+  state.sensors = status.sensors;
+  if (status.recording_available === false) {
+    document.querySelector('#nav button[data-view="record"]').classList.add("view-hidden");
+    if (!document.getElementById("view-record").classList.contains("view-hidden")) switchView("library");
+    document.getElementById("root-card").classList.remove("view-hidden");
+    document.getElementById("status").style.display = "none";
+    document.getElementById("timer").style.display = "none";
+    if (!state.rootSeeded) {
+      document.getElementById("library-root").value = status.output_folder;
+      state.rootSeeded = true;
+    }
+  }
+
+  const pill = document.getElementById("status");
+  pill.className = "status-pill" + (state.recording ? " recording" : "");
+  document.getElementById("status-text").textContent = state.recording ? "on air" : "idle";
+  const timer = document.getElementById("timer");
+  timer.textContent = formatElapsed(status.elapsed_seconds);
+  timer.className = state.recording ? "live" : "";
+  document.getElementById("episode-label").textContent = state.recording ? status.episode_name : "";
+  document.getElementById("disk").textContent = `${status.output_folder} · ${status.disk_free_gb} GB free`;
+  document.getElementById("record").className = "record-button" + (state.recording ? " recording" : "");
+  document.getElementById("rec-badge").style.display = state.recording ? "flex" : "none";
+  document.getElementById("hint").textContent = state.recording ? "Recording… press to stop" : "Ready";
+
+  const generateButton = document.getElementById("generate");
+  const generationStatus = document.getElementById("generation-status");
+  generateButton.hidden = !status.generation_available;
+  const generation = status.generation || { state: "idle" };
+  const generationRunning = generation.state === "running";
+  generateButton.disabled = state.recording || generationRunning;
+  document.getElementById("record").disabled = generationRunning;
+  generationStatus.className = "hint " + generation.state;
+  if (generation.state === "running") {
+    generationStatus.textContent = "Generating dataset…";
+  } else if (generation.state === "done") {
+    const failed = Object.keys(generation.failed || {}).length;
+    generationStatus.textContent =
+      `Generated ${generation.written.length} episodes` + (failed ? `, ${failed} discarded` : "");
+  } else if (generation.state === "failed") {
+    generationStatus.textContent = "Generation failed: " + generation.error;
+  } else {
+    generationStatus.textContent = "";
+  }
+  const failures = document.getElementById("generation-failures");
+  const failedEntries = Object.entries(generation.failed || {});
+  failures.hidden = failedEntries.length === 0;
+  failures.innerHTML = failedEntries
+    .map(([name, reason]) => `<div class="reason"><b>${name}</b> — ${reason}</div>`)
+    .join("");
+  if (state.lastGenerationState === "running" && generation.state !== "running") refreshEpisodes();
+  state.lastGenerationState = generation.state;
+  renderSensors();
+}
+
+function formatWhen(timestamp) {
+  return new Date(timestamp * 1000).toLocaleString();
+}
+
+async function refreshEpisodes() {
+  const response = await fetch("/api/episodes");
+  const episodes = await response.json();
+  const list = document.getElementById("episodes");
+  if (!episodes.length) { list.innerHTML = "<div class='empty'>No episodes yet.</div>"; return; }
+  list.innerHTML = "";
+  for (const episode of episodes) {
+    const entry = document.createElement("div");
+    entry.className = "episode";
+    const files = episode.files.map(file => {
+      const href = `/episodes/${episode.name}/${file.name}`;
+      const play = file.playable ? `<a href="#" class="play" data-src="${href}/playback">&#9654; play</a>` : "";
+      return `<div class="file"><span class="fname">${file.name}</span>` +
+             `<span class="size">${file.size_megabytes} MB</span>` +
+             `<a href="${href}" download>&#8595; download</a>${play}</div>`;
+    }).join("");
+    const firstPlayable = episode.files.find(file => file.playable);
+    const annotateLink = firstPlayable
+      ? `<a href="#" class="annotate" title="annotate phases">&#9998;</a>` : "";
+    entry.innerHTML =
+      `<div class="episode-header"><span class="chevron">&#9654;</span>` +
+      `<span class="name">${episode.name}</span>` + annotateLink +
+      `<span class="when">${formatWhen(episode.modified_timestamp)}</span></div>` +
+      `<div class="files">${files}</div>`;
+    entry.querySelector(".episode-header").addEventListener("click", () => entry.classList.toggle("open"));
+    const annotateButton = entry.querySelector("a.annotate");
+    if (annotateButton) {
+      annotateButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openAnnotator(episode.name, `/episodes/${episode.name}/${firstPlayable.name}/playback`);
+      });
+    }
+    for (const playLink of entry.querySelectorAll("a.play")) {
+      playLink.addEventListener("click", (event) => {
+        event.preventDefault();
+        const playerCard = document.getElementById("player-card");
+        const player = document.getElementById("player");
+        playerCard.style.display = "block";
+        player.src = playLink.dataset.src;
+        player.play();
+      });
+    }
+    list.appendChild(entry);
+  }
+}
+
+async function post(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const payload = await response.json();
+  if (!response.ok) alert(payload.error || "Request failed");
+  return response.ok;
+}
+
+document.getElementById("record").addEventListener("click", async () => {
+  if (state.recording) {
+    if (await post("/api/recording/stop")) { refreshStatus(); refreshEpisodes(); }
+    return;
+  }
+  const body = { episode_name: document.getElementById("episode-name").value || null };
+  if (state.deselected.size > 0) {
+    body.recorders = state.sensors.map(s => s.name).filter(name => !state.deselected.has(name));
+  }
+  if (await post("/api/recording/start", body)) refreshStatus();
+});
+
+document.getElementById("gen-format").addEventListener("change", (event) => {
+  document.getElementById("gen-output-root").hidden = event.target.value !== "lerobot";
+});
+
+document.getElementById("generate").addEventListener("click", async () => {
+  const overrides = { save_frames: document.getElementById("gen-frames").checked };
+  const tolerance = document.getElementById("gen-tolerance").value;
+  if (tolerance) overrides["max_sync_difference_seconds"] = Number(tolerance);
+  const format = document.getElementById("gen-format").value;
+  const outputRoot = document.getElementById("gen-output-root").value || null;
+  if (format === "lerobot") {
+    overrides["writer"] = { type: "lerobot", output_root: outputRoot || "", repo_id: null, use_videos: true };
+  } else if (outputRoot) {
+    overrides["writer"] = { type: "csv", output_root: outputRoot };
+  }
+  if (await post("/api/generation/start", { overrides })) refreshStatus();
+});
+
+const feed = document.getElementById("feed");
+feed.src = "/stream/camera";
+feed.addEventListener("error", () => {
+  feed.hidden = true;
+  document.getElementById("feed-missing").hidden = false;
+});
+
+
+const annotator = { episode: null, segments: [], timeline: [], selected: -1, drag: null };
+
+function phaseColor(label) {
+  const key = String(label) + phaseName(label);
+  let hash = 0;
+  for (const character of key) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return `hsl(${hash % 360} 65% 62%)`;
+}
+
+function annStart() { return annotator.timeline[0]; }
+function annEnd() { return annotator.timeline[annotator.timeline.length - 1] + 1; }
+function annSpan() { return annEnd() - annStart(); }
+
+function annTimestampAtVideoTime() {
+  const video = document.getElementById("ann-video");
+  if (!video.duration) return annStart();
+  const index = Math.min(
+    annotator.timeline.length - 1,
+    Math.max(0, Math.round(video.currentTime / video.duration * (annotator.timeline.length - 1))),
+  );
+  return annotator.timeline[index];
+}
+
+function annSeekToTimestamp(timestamp) {
+  const video = document.getElementById("ann-video");
+  if (!video.duration) return;
+  const fraction = (timestamp - annStart()) / annSpan();
+  video.currentTime = fraction * video.duration;
+}
+
+function renderAnnotator() {
+  const bar = document.getElementById("ann-timeline");
+  for (const element of bar.querySelectorAll(".ann-segment, .ann-edge")) element.remove();
+  annotator.segments.forEach((segment, index) => {
+    const left = (segment.start - annStart()) / annSpan() * 100;
+    const width = (segment.end - segment.start) / annSpan() * 100;
+    const block = document.createElement("div");
+    block.className = "ann-segment" + (segment.source === "manual" ? " manual" : "") +
+      (index === annotator.selected ? " selected" : "");
+    block.style.left = left + "%";
+    block.style.width = width + "%";
+    block.style.background = phaseColor(segment.phase);
+    block.textContent = width > 7 ? phaseName(segment.phase) : "";
+    bar.appendChild(block);
+    if (index > 0) {
+      const edge = document.createElement("div");
+      edge.className = "ann-edge";
+      edge.style.left = `calc(${left}% - 4px)`;
+      edge.addEventListener("pointerdown", (event) => {
+        annotator.drag = index;
+        event.preventDefault();
+      });
+      bar.appendChild(edge);
+    }
+  });
+  const legend = document.getElementById("ann-legend");
+  const phases = [...new Set(annotator.segments.map(segment => segment.phase))];
+  legend.innerHTML = phases.map(label =>
+    `<span class="chip"><span class="swatch" style="background:${phaseColor(label)}"></span>${label}: ${phaseName(label)}</span>`
+  ).join("");
+  const selected = annotator.segments[annotator.selected];
+  document.getElementById("ann-phase").disabled = !selected;
+  document.getElementById("ann-delete").disabled = !selected;
+  const preview = document.getElementById("ann-instruction-preview");
+  if (selected) {
+    document.getElementById("ann-phase").value = String(selected.phase);
+    const entry = state.legend.phase_legend[String(selected.phase)];
+    const variants = entry ? entry.instructions.length : 0;
+    preview.textContent = variants === 0 ? "no instructions in legend"
+      : variants === 1 ? entry.instructions[0]
+      : `${variants} instruction variants (sampled per episode)`;
+  } else {
+    preview.textContent = "";
+  }
+}
+
+async function openAnnotator(episodeName, videoHref) {
+  const response = await fetch(`/api/episodes/${episodeName}/annotations`);
+  const payload = await response.json();
+  if (!payload.timeline.length) { alert("No timeline available for this episode."); return; }
+  annotator.episode = episodeName;
+  annotator.timeline = payload.timeline;
+  state.legend = payload.legend;
+  const labels = Object.keys(state.legend.phase_legend);
+  const defaultLabel = labels.length ? parseInt(labels[0]) : 0;
+  annotator.segments = payload.segments.length ? payload.segments : [
+    { start: payload.timeline[0], end: payload.timeline[payload.timeline.length - 1] + 1,
+      phase: defaultLabel, source: "manual", language: null },
+  ];
+  annotator.selected = -1;
+  document.getElementById("ann-episode").textContent = episodeName;
+  document.getElementById("ann-phase").innerHTML =
+    labels.map(label => `<option value="${label}">${label} — ${phaseName(label)}</option>`).join("");
+  const video = document.getElementById("ann-video");
+  video.src = videoHref;
+  document.getElementById("annotator-card").style.display = "block";
+  document.getElementById("player-card").style.display = "none";
+  renderAnnotator();
+}
+
+document.getElementById("ann-timeline").addEventListener("pointerdown", (event) => {
+  if (event.target.classList.contains("ann-edge")) return;
+  const bar = document.getElementById("ann-timeline");
+  const fraction = (event.clientX - bar.getBoundingClientRect().left) / bar.clientWidth;
+  const timestamp = annStart() + fraction * annSpan();
+  annSeekToTimestamp(timestamp);
+  annotator.selected = annotator.segments.findIndex(
+    segment => timestamp >= segment.start && timestamp < segment.end);
+  renderAnnotator();
+});
+
+window.addEventListener("pointermove", (event) => {
+  if (annotator.drag === null || annotator.drag === undefined) return;
+  const bar = document.getElementById("ann-timeline");
+  const fraction = Math.min(1, Math.max(0,
+    (event.clientX - bar.getBoundingClientRect().left) / bar.clientWidth));
+  const timestamp = Math.round(annStart() + fraction * annSpan());
+  const index = annotator.drag;
+  const previous = annotator.segments[index - 1];
+  const current = annotator.segments[index];
+  if (timestamp > previous.start && timestamp < current.end) {
+    previous.end = timestamp;
+    current.start = timestamp;
+    previous.source = "manual";
+    current.source = "manual";
+    renderAnnotator();
+  }
+});
+window.addEventListener("pointerup", () => { annotator.drag = null; });
+
+document.getElementById("ann-video").addEventListener("timeupdate", () => {
+  if (!annotator.timeline.length) return;
+  const timestamp = annTimestampAtVideoTime();
+  const fraction = (timestamp - annStart()) / annSpan();
+  document.getElementById("ann-playhead").style.left = (fraction * 100) + "%";
+});
+
+document.getElementById("ann-split").addEventListener("click", () => {
+  const timestamp = Math.round(annTimestampAtVideoTime());
+  const index = annotator.segments.findIndex(
+    segment => timestamp > segment.start && timestamp < segment.end - 1);
+  if (index < 0) return;
+  const segment = annotator.segments[index];
+  const tail = { ...segment, start: timestamp, source: "manual" };
+  segment.end = timestamp;
+  segment.source = "manual";
+  annotator.segments.splice(index + 1, 0, tail);
+  annotator.selected = index + 1;
+  renderAnnotator();
+});
+
+document.getElementById("ann-delete").addEventListener("click", () => {
+  if (annotator.selected < 0) return;
+  const removed = annotator.segments.splice(annotator.selected, 1)[0];
+  const neighbor = annotator.segments[Math.max(0, annotator.selected - 1)];
+  if (neighbor) {
+    if (neighbor.start >= removed.start) neighbor.start = removed.start;
+    else neighbor.end = removed.end;
+    neighbor.source = "manual";
+  }
+  annotator.selected = -1;
+  renderAnnotator();
+});
+
+document.getElementById("ann-phase").addEventListener("change", (event) => {
+  const selected = annotator.segments[annotator.selected];
+  if (!selected || event.target.value === "") return;
+  selected.phase = parseInt(event.target.value);
+  selected.source = "manual";
+  renderAnnotator();
+});
+
+document.getElementById("ann-save").addEventListener("click", async () => {
+  const response = await fetch(`/api/episodes/${annotator.episode}/annotations`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ segments: annotator.segments }),
+  });
+  const payload = await response.json();
+  if (!response.ok) { alert(payload.error || "Save failed"); return; }
+  document.getElementById("ann-hint").textContent = `Saved ${payload.saved} segments.`;
+});
+
+document.getElementById("ann-close").addEventListener("click", () => {
+  document.getElementById("annotator-card").style.display = "none";
+  document.getElementById("ann-video").pause();
+});
+
+document.getElementById("root-scan").addEventListener("click", async () => {
+  const hint = document.getElementById("root-hint");
+  const response = await fetch("/api/library/root", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: document.getElementById("library-root").value }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    hint.textContent = payload.error || "Failed to switch folder";
+    hint.style.color = "var(--red)";
+    return;
+  }
+  hint.textContent = `Scanning ${payload.output_folder}`;
+  hint.style.color = "";
+  refreshEpisodes();
+  loadLegend();
+});
+
+function renderLegendEditor() {
+  document.getElementById("legend-dataset").value = state.legend.dataset_name || "";
+  document.getElementById("legend-task").value = state.legend.task || "";
+  const rows = document.getElementById("legend-rows");
+  rows.innerHTML = "";
+  for (const [label, entry] of Object.entries(state.legend.phase_legend)) {
+    const row = document.createElement("div");
+    row.className = "legend-row";
+    row.innerHTML =
+      `<input class="label-input" type="number" value="${label}">` +
+      `<input type="text" placeholder="phase name" value="${entry.name || ""}">` +
+      `<textarea placeholder="instructions, one per line">${(entry.instructions || []).join("\n")}</textarea>` +
+      `<button class="remove" title="remove">&times;</button>`;
+    row.querySelector(".remove").addEventListener("click", () => { row.remove(); });
+    rows.appendChild(row);
+  }
+}
+
+async function loadLegend() {
+  const response = await fetch("/api/library/metadata");
+  state.legend = await response.json();
+  renderLegendEditor();
+}
+
+document.getElementById("legend-add").addEventListener("click", () => {
+  const labels = Object.keys(state.legend.phase_legend).map(Number);
+  const next = labels.length ? Math.max(...labels) + 1 : 0;
+  state.legend.phase_legend[String(next)] = { name: "", instructions: [] };
+  renderLegendEditor();
+});
+
+document.getElementById("legend-save").addEventListener("click", async () => {
+  const legend = {};
+  for (const row of document.querySelectorAll("#legend-rows .legend-row")) {
+    const inputs = row.querySelectorAll("input, textarea");
+    const label = inputs[0].value;
+    if (label === "") continue;
+    legend[label] = {
+      name: inputs[1].value,
+      instructions: inputs[2].value.split("\n").map(line => line.trim()).filter(Boolean),
+    };
+  }
+  const payload = {
+    dataset_name: document.getElementById("legend-dataset").value,
+    task: document.getElementById("legend-task").value,
+    phase_legend: legend,
+  };
+  const response = await fetch("/api/library/metadata", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (response.ok) {
+    state.legend = await response.json();
+    renderLegendEditor();
+    document.getElementById("legend-hint").textContent = "Legend saved to dataset_metadata.json.";
+  }
+});
+
+refreshStatus();
+refreshEpisodes();
+loadLegend();
+setInterval(refreshStatus, 1000);
+setInterval(refreshEpisodes, 10000);
+</script>
+</body>
+</html>

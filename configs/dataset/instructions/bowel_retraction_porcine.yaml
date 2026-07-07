@@ -1,0 +1,76 @@
+# Dataset metadata with the phase legend for bowel retraction
+# (porcine experiments): integer labels map to a phase name and
+# instruction variants; one variant is sampled per episode.
+dataset_name: bowel_retraction
+phase_legend:
+  0:
+    instructions:
+    - Hold position until the surgeon grasps the bowel segment and offers it toward your grasper. Your
+      robotic grasper is visible in view.
+    - Stay in place as you wait for the surgeon to seize the bowel and extend it for handover to your
+      gripper.
+    - Remain positioned until the surgeon picks up the bowel segment and positions it for your robotic
+      grasp.
+    - Keep your current spot until the surgeon grabs the bowel and brings it close for transfer to your
+      gripper.
+    - Maintain position while observing the surgeon grasp the bowel and prepare to hand it over to you.
+    - Remain still until the surgeon takes hold of the bowel and moves it into handover range.
+    - Keep steady until the surgeon grips the bowel segment and presents it for your grasp.
+    - Maintain your spot waiting for the surgeon to grab the bowel and bring it to your reach.
+    - Remain fixed until the surgeon secures the bowel segment and offers it to your gripper.
+    - Keep your position as you await the surgeon grasping the bowel for transferring it to you.
+    name: wait_for_grasp_target
+  1:
+    instructions:
+    - Approach the surgeon's grasped bowel and open your gripper to receive and take over the hold.
+    - Move toward the bowel being held by the surgeon and open your grasper for gentle transfer.
+    - Navigate to the offered bowel segment from surgeon and open your gripper to accept the handover.
+    - Head to the position of the surgeon-held bowel and open your grasper in prep for receiving.
+    - Advance to the bowel offered by surgeon and open your grasper for seamless takeover.
+    - Proceed to the bowel segment in surgeon's grip and open your grasper for handover acceptance.
+    - Travel to the surgeon-grasped bowel and open your grasper to receive the tissue handover.
+    - Direct your gripper to the surgeon's held bowel and open your grasper wide for transfer.
+    - Approach the target bowel from surgeon's grasp and open your gripper for the hand-over.
+    - Move to the spot of the surgeon-offered bowel and open your grasper for gentle takeover.
+    name: approach_and_open
+  2:
+    instructions:
+    - Close down on the bowel segment for hold. Keep position awaiting surgeon's counterpart grasp.
+    - Close the tool firmly around the bowel. Maintain position awaiting surgeon's hold on the bowel.
+    - Activate your grip on the pointed tissue by closing the tool. Wait in place for surgeon's counterpart
+      grip.
+    - Engage the bowel by shutting your gripper. Remain fixed until surgeon secures the far end.
+    - Grasp the bowel tissue via closing your clamp. Hold location as surgeon grabs opposite.
+    - Secure the bowel segment with a firm gripper close. Stay until surgeon's other-end seizure.
+    - Close your end-effector to hold the bowel. Keep position while surgeon takes the rest.
+    - Pinch the tissue by contracting your gripper. Await surgeon's grasp on the other portion.
+    - Lock onto the bowel with your closing jaws. Maintain spot for surgeon's dual hold.
+    - Grip the bowel tightly via gripper closure. Remain until surgeon's end is secured.
+    name: grasp_and_hold
+  3:
+    instructions:
+    - Once surgeon grips opposite, retreat your tool carefully to straighten the bowel fully.
+    - 'Surgeon secured the far end: draw the bowel rearward steadily till straight and retracted.'
+    - After surgeon's opposite hold, move backward gently to fully extend the bowel in sight.
+    - 'Surgeon has the other side: retract bowel by easing back until it''s straight and pulled.'
+    - Pull back on gripped bowel post-surgeon's end grasp, continuing till fully straight in camera.
+    - 'Surgeon''s grip in place: back up your instrument to retract bowel until visually straight.'
+    - Once opposite end is taken, draw back carefully to fully straighten the bowel tissue.
+    - Retreat with bowel after surgeon's hold, moving rear until it's extended and aligned.
+    - Withdraw your instrument to extend bowel straight, following surgeon's opposite hold.
+    - With both ends grasped, withdraw to straighten the bowel in the camera frame completely.
+    name: retract
+  4:
+    instructions:
+    - Keep your position locked with the bowel gripped tight after full retraction.
+    - Maintain steady hold on the retracted bowel segment in current spot.
+    - Stay put, gripping the straight bowel firmly without movement.
+    - Keep the retracted bowel grasped and your tool stationary.
+    - Maintain grip and position on the straightened bowel tissue.
+    - Stay in place with firm hold on the taut bowel segment.
+    - Hold steady, keeping the bowel gripped post-retraction.
+    - Preserve your spot and bowel grasp after alignment.
+    - Remain fixed, clamping the fully straight bowel.
+    - Stay stationary with secure bowel grip in view.
+    name: hold_completed
+task: retract the bowel

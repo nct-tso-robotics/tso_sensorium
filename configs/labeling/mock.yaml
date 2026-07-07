@@ -1,0 +1,11 @@
+# Phase labeling for the mock recordings: the tool pose moves on a
+# circle, so thresholding x splits each episode into alternating phases.
+recordings_root: ""
+state_file: pose.csv
+sync_column: time
+labeler:
+  type: column_threshold
+  column: pose_position_x
+  threshold: 0.0
+  above_phase: 1  # right_half
+  below_phase: 0  # left_half
