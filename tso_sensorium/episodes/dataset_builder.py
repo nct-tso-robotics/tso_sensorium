@@ -133,18 +133,24 @@ class DatasetBuilder:
             if episode is None:
                 report.failed[episode_directory.name] = failure_reason
                 continue
-            self.writer.add_episode(episode=episode)
+            # A bad episode (missing frame, empty task) discards that
+            # episode rather than aborting the whole build unfinalized.
+            try:
+                self.writer.add_episode(episode=episode)
+            except (ValueError, OSError, KeyError) as error:
+                report.failed[episode_directory.name] = str(error)
+                continue
             report.written.append(episode.name)
-        metadata_payload = (
-            self.dataset_metadata.to_payload()
-            if self.dataset_metadata is not None
-            else {}
-        )
-        metadata_payload["generation"] = {
-            "written": report.written,
-            "failed": report.failed,
-            "generated_at": datetime.datetime.now().isoformat(),
-        }
-        self.writer.write_metadata(metadata=metadata_payload)
+        # Metadata is only written when there is something to say (a phase
+        # legend), so a build without annotations never overwrites a
+        # curated dataset_metadata.json with empty content.
+        if self.dataset_metadata is not None:
+            metadata_payload = self.dataset_metadata.to_payload()
+            metadata_payload["generation"] = {
+                "written": report.written,
+                "failed": report.failed,
+                "generated_at": datetime.datetime.now().isoformat(),
+            }
+            self.writer.write_metadata(metadata=metadata_payload)
         self.writer.finalize()
         return report

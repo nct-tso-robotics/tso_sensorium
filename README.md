@@ -26,9 +26,12 @@ pip install -e ".[lerobot]"   # + LeRobot dataset export (Python >= 3.10)
 pip install -e ".[test]"      # + pytest
 ```
 
-Python requirements: the core library runs on Python 3.8+, the config
-modules and scripts need 3.9+ (pydantic), and LeRobot export needs 3.10+.
-Extras combine as usual, e.g. `pip install -e ".[gui,test]"`.
+Python requirements: 3.9+ (the pydantic-backed config layer); LeRobot
+export additionally needs 3.10+. Extras combine as usual, e.g.
+`pip install -e ".[gui,test]"`. After install the scripts are available
+as console commands (`tso-record`, `tso-record-service`, `tso-annotate`,
+`tso-generate-dataset`, `tso-label-phases`, and the `*-ros2` variants),
+equivalent to the `python -m tso_sensorium.scripts.*` forms used below.
 
 ### ROS environments (recording)
 
@@ -104,8 +107,7 @@ python -m tso_sensorium.scripts.generate_dataset \
     --writer.type lerobot --writer.output_root /data/lerobot
 ```
 
-The config modules require Python 3.9+ (pydantic); the core library stays
-importable on Python 3.8.
+All modules require Python 3.9+ (pydantic-backed config layer).
 
 ### Recording
 

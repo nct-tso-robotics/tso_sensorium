@@ -183,3 +183,16 @@ class TestVideoData:
                 match=re.escape("Could not open video file episode.mp4"),
             ):
                 video_data._save_frames()
+
+
+@pytest.mark.unit
+def test_nan_timestamp_raises_instead_of_silent_corruption(tmp_path):
+    state_path = tmp_path / "state.csv"
+    pd.DataFrame({"time": [0, np.nan, 2e8], "x": [1.0, 2.0, 3.0]}).to_csv(
+        state_path, index=False
+    )
+    state = StateData(
+        state_data_path=state_path, sync_col_name="time", dataset_cols=["x"]
+    )
+    with pytest.raises(ValueError, match="missing values"):
+        state.get_data(source_sync_dataframe=pd.Series([0.0, 1e8, 2e8]))
