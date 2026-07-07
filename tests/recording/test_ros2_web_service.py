@@ -1,0 +1,135 @@
+"""Tests for tso_sensorium.recording.ros2.web_service module."""
+
+import time
+
+import numpy as np
+import pytest
+
+rclpy = pytest.importorskip("rclpy")
+flask = pytest.importorskip("flask")
+
+from rclpy.node import Node  # noqa: E402
+from sensor_msgs.msg import Image  # noqa: E402
+from std_msgs.msg import String  # noqa: E402
+
+from tso_sensorium.recording.config import (  # noqa: E402
+    RecordingServiceConfig,
+    RecordingSessionConfig,
+    TopicRecorderConfig,
+)
+from tso_sensorium.recording.ros2.web_service import (  # noqa: E402
+    build_recording_service,
+    create_app,
+)
+
+STATE_TOPIC = "/webtest2/state"
+CAMERA_TOPIC = "/webtest2/camera"
+QUEUE_DEPTH = 1
+
+
+@pytest.fixture
+def ros_node():
+    rclpy.init()
+    node = Node("tso_web_service_test")
+    yield node
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+@pytest.fixture
+def service_factory(ros_node, tmp_path):
+    services = []
+
+    def factory():
+        config = RecordingServiceConfig(
+            session=RecordingSessionConfig(
+                output_folder=str(tmp_path / "episodes"),
+                recorders=[
+                    TopicRecorderConfig(
+                        file_name="state",
+                        topic_name=STATE_TOPIC,
+                        message_type="std_msgs.msg.String",
+                        fields=["data"],
+                    )
+                ],
+            ),
+            staleness_seconds=1.0,
+            camera_topic=CAMERA_TOPIC,
+        )
+        service = build_recording_service(node=ros_node, config=config)
+        services.append(service)
+        return service
+
+    yield factory
+    for service in services:
+        service.close()
+
+
+def _publish_until(node, publisher, message, condition, timeout_seconds=5.0):
+    deadline = time.monotonic() + timeout_seconds
+    while not condition() and time.monotonic() < deadline:
+        publisher.publish(message)
+        rclpy.spin_once(node, timeout_sec=0.05)
+    if not condition():
+        raise TimeoutError("Condition not met while publishing")
+
+
+@pytest.mark.integration
+def test_recording_lifecycle_over_http(service_factory, ros_node, tmp_path):
+    service = service_factory()
+    client = create_app(service=service).test_client()
+
+    status = client.get("/api/status").get_json()
+    assert status["state"] == "idle"
+    assert status["recording_available"] is True
+    assert status["sensors"][0]["alive"] is False
+
+    state_publisher = ros_node.create_publisher(String, STATE_TOPIC, QUEUE_DEPTH)
+    _publish_until(
+        node=ros_node,
+        publisher=state_publisher,
+        message=String(data="value_0"),
+        condition=lambda: service.liveness.is_alive(topic_name=STATE_TOPIC),
+    )
+    assert client.get("/api/status").get_json()["sensors"][0]["alive"] is True
+
+    started = client.post("/api/recording/start", json={"episode_name": "ep_ros2"})
+    assert started.status_code == 200
+    assert client.get("/api/status").get_json()["state"] == "recording"
+
+    csv_path = tmp_path / "episodes" / "ep_ros2" / "state.csv"
+    _publish_until(
+        node=ros_node,
+        publisher=state_publisher,
+        message=String(data="value_1"),
+        condition=lambda: csv_path.is_file() and csv_path.stat().st_size > 20,
+    )
+    stopped = client.post("/api/recording/stop", json={})
+    assert stopped.get_json() == {"episode_name": "ep_ros2"}
+    assert client.get("/api/status").get_json()["state"] == "idle"
+    assert "value_1" in csv_path.read_text()
+
+    served = client.get("/episodes/ep_ros2/state.csv")
+    assert served.status_code == 200
+    assert b"value_1" in served.data
+
+
+@pytest.mark.integration
+def test_camera_feed_and_stream(service_factory, ros_node):
+    service = service_factory()
+    client = create_app(service=service).test_client()
+
+    frame = np.full((8, 6, 3), 90, dtype=np.uint8)
+    message = Image(height=8, width=6, encoding="bgr8", step=18, data=frame.tobytes())
+    camera_publisher = ros_node.create_publisher(Image, CAMERA_TOPIC, QUEUE_DEPTH)
+    _publish_until(
+        node=ros_node,
+        publisher=camera_publisher,
+        message=message,
+        condition=lambda: service.camera_feed.latest_jpeg is not None,
+    )
+
+    response = client.get("/stream/camera")
+    chunk = next(response.response)
+    assert b"Content-Type: image/jpeg" in chunk
+    response.close()

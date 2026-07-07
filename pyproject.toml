@@ -144,6 +144,7 @@ ros-jazzy-rclpy = "*"
 ros-jazzy-sensor-msgs = "*"
 ros-jazzy-std-msgs = "*"
 ros-jazzy-geometry-msgs = "*"
+flask = ">=3"
 
 [tool.pixi.environments]
 default = ["test"]

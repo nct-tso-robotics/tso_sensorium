@@ -145,6 +145,17 @@ python -m tso_sensorium.scripts.record_service \
     --config_path configs/recording/mock_service.yaml
 ```
 
+The same dashboard runs on ROS 2 (`record_service_ros2`,
+`mock_sensors_ros2`) with identical configs — recorder entries reference
+message types by dotted path (`std_msgs.msg.Bool`), which resolve to the
+ROS 2 classes inside a ROS 2 environment:
+
+```bash
+python -m tso_sensorium.scripts.mock_sensors_ros2 &
+python -m tso_sensorium.scripts.record_service_ros2 \
+    --config_path configs/recording/mock_service.yaml
+```
+
 ### Annotation and dataset studio (no ROS required)
 
 The Library section also runs as a standalone app on any machine — a
