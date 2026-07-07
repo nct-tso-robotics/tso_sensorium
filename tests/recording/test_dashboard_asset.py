@@ -16,6 +16,13 @@ def dashboard_page():
 def test_script_references_existing_elements(dashboard_page):
     defined_ids = set(re.findall(r'id="([^"]+)"', dashboard_page))
     referenced_ids = set(re.findall(r'getElementById\("([^"]+)"\)', dashboard_page))
+    referenced_ids |= {
+        selector[1:]
+        for selector in re.findall(
+            r"querySelector(?:All)?\([\"']([^\"']+)[\"']\)", dashboard_page
+        )
+        if selector.startswith("#") and " " not in selector and "[" not in selector
+    }
     missing = sorted(referenced_ids - defined_ids)
     assert missing == [], (
         f"Dashboard JS references ids missing from the HTML: {missing}."

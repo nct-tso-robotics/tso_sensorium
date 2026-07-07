@@ -121,10 +121,9 @@ class LibraryService:
                 generation_config = apply_generation_overrides(
                     config=generation_config, overrides=overrides
                 )
-            if not generation_config.recordings_root:
-                generation_config = generation_config.model_copy(
-                    update={"recordings_root": str(self.recordings_root)}
-                )
+            generation_config = generation_config.model_copy(
+                update={"recordings_root": str(self.recordings_root)}
+            )
             self._generation_status = {"state": "running"}
             self._generation_thread = threading.Thread(
                 target=self._run_generation,

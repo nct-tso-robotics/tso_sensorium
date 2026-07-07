@@ -197,3 +197,14 @@ class TestImageBufferToBgrFrame:
         )
         assert decoded.shape == (4, 6, 3)
         np.testing.assert_array_equal(decoded, frame[:, :, :3])
+
+
+class TestVideoFileWriterClose:
+    @pytest.mark.unit
+    def test_frames_after_close_are_dropped(self, tmp_path):
+        writer = VideoFileWriter(
+            output_folder=tmp_path, file_name="camera", frames_per_second=15
+        )
+        writer.close()
+        writer.write_frame(frame=np.zeros((8, 6, 3), dtype=np.uint8))
+        assert not (tmp_path / "camera.mp4").exists()

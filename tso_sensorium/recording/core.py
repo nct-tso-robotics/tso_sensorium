@@ -112,13 +112,19 @@ class VideoFileWriter:
         self.frames_per_second = frames_per_second
         self.fourcc = LOSSLESS_FOURCC if lossless_compression else LOSSY_FOURCC
         self._video_writer: Optional[cv2.VideoWriter] = None
+        self._closed = False
 
     def write_frame(self, frame: np.ndarray) -> None:
         """Append a BGR frame, creating the encoder on first use.
 
+        Frames arriving after ``close`` are dropped: subscription
+        callbacks can still fire while a recording is being stopped.
+
         Args:
             frame: BGR image, (H, W, 3). All frames must share one size.
         """
+        if self._closed:
+            return
         if self._video_writer is None:
             height, width = frame.shape[:2]
             self._video_writer = cv2.VideoWriter(
@@ -131,5 +137,6 @@ class VideoFileWriter:
 
     def close(self) -> None:
         """Finalize the video file if any frame was written."""
+        self._closed = True
         if self._video_writer is not None:
             self._video_writer.release()
