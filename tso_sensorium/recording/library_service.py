@@ -292,6 +292,25 @@ def register_library_routes(app: Flask, library: LibraryService) -> None:
         metadata.save(path=library.metadata_path())
         return jsonify(metadata.to_payload())
 
+    @app.get("/api/library/directories")
+    def list_directories():
+        requested = request.args.get("path") or str(library.recordings_root)
+        root = Path(requested).expanduser().resolve()
+        if not root.is_dir():
+            raise ValueError(f"Not a directory: {requested}")
+        directories = sorted(
+            entry.name
+            for entry in root.iterdir()
+            if entry.is_dir() and not entry.name.startswith(".")
+        )
+        return jsonify(
+            {
+                "path": str(root),
+                "parent": str(root.parent) if root.parent != root else None,
+                "directories": directories,
+            }
+        )
+
     @app.post("/api/library/root")
     def set_library_root():
         payload = request.get_json(silent=True) or {}

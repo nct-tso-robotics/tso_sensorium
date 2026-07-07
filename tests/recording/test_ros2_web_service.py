@@ -133,3 +133,27 @@ def test_camera_feed_and_stream(service_factory, ros_node):
     chunk = next(response.response)
     assert b"Content-Type: image/jpeg" in chunk
     response.close()
+
+
+@pytest.mark.integration
+def test_output_folder_switching(service_factory, tmp_path):
+    service = service_factory()
+    client = create_app(service=service).test_client()
+
+    other = tmp_path / "other_recordings"
+    other.mkdir()
+    switched = client.post("/api/recording/output_folder", json={"path": str(other)})
+    assert switched.status_code == 200
+    status = client.get("/api/status").get_json()
+    assert status["output_folder"] == str(other)
+
+    missing = client.post(
+        "/api/recording/output_folder", json={"path": str(other / "nope")}
+    )
+    assert missing.status_code == 400
+
+    client.post("/api/recording/start", json={"episode_name": "ep_locked"})
+    locked = client.post("/api/recording/output_folder", json={"path": str(other)})
+    assert locked.status_code == 409
+    client.post("/api/recording/stop", json={})
+    assert (other / "ep_locked").is_dir()

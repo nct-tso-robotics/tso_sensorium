@@ -113,3 +113,19 @@ def test_generation_without_ros(library_client_factory):
     assert generation["state"] == "done"
     assert generation["written"] == ["ep0"]
     assert (episode / "episode.csv").is_file()
+
+
+@pytest.mark.unit
+def test_directory_listing(library_client_factory, tmp_path):
+    client, root = library_client_factory()
+    (root / "episode_a").mkdir()
+    (root / "episode_b").mkdir()
+    (root / ".hidden").mkdir()
+
+    listing = client.get(f"/api/library/directories?path={root}").get_json()
+    assert listing["path"] == str(root)
+    assert listing["parent"] == str(root.parent)
+    assert listing["directories"] == ["episode_a", "episode_b"]
+
+    missing = client.get(f"/api/library/directories?path={root / 'nope'}")
+    assert missing.status_code == 400

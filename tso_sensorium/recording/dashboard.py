@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
 from typing import Callable, Iterator, Optional, Protocol
 
 from flask import Flask, Response, jsonify, request
@@ -144,6 +145,25 @@ class RecordingService:
             self._session_started_at = time.monotonic()
             return {"episode_name": session.episode_name}
 
+    def set_output_folder(self, path: str) -> dict:
+        """Point new episodes and the library at a different folder.
+
+        Args:
+            path: Existing directory receiving future episodes.
+
+        Returns:
+            The new output folder.
+        """
+        with self._lock:
+            if self._session is not None:
+                raise RuntimeError("Cannot change the output folder while recording")
+        root = Path(path).expanduser()
+        if not root.is_dir():
+            raise ValueError(f"Not a directory: {path}")
+        self.config.session.output_folder = str(root)
+        self.library.set_root(recordings_root=root)
+        return {"output_folder": str(root)}
+
     def stop_recording(self) -> dict:
         """Stop the running episode and finalize its files."""
         with self._lock:
@@ -199,6 +219,11 @@ def create_app(service: RecordingService) -> Flask:
     @app.post("/api/recording/stop")
     def stop_recording():
         return jsonify(service.stop_recording())
+
+    @app.post("/api/recording/output_folder")
+    def set_output_folder():
+        payload = request.get_json(silent=True) or {}
+        return jsonify(service.set_output_folder(path=str(payload.get("path", ""))))
 
     @app.get("/stream/camera")
     def camera_stream():
