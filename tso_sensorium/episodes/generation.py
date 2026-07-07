@@ -9,7 +9,6 @@ from typing import Callable
 import pandas as pd
 
 from tso_sensorium.episodes.annotations import EpisodeAnnotations
-from tso_sensorium.episodes.legend import DatasetMetadata
 from tso_sensorium.episodes.builder import EpisodeGenerator
 from tso_sensorium.episodes.dataset_builder import BuildReport, DatasetBuilder
 from tso_sensorium.episodes.generation_config import (
@@ -88,11 +87,7 @@ def apply_annotations(
     annotations = EpisodeAnnotations.load(
         path=episode_directory / annotations_config.file_name
     )
-    legend = annotations_config.legend
-    if legend is None:
-        legend = DatasetMetadata.load(
-            path=episode_directory.parent / annotations_config.metadata_file
-        )
+    legend = annotations_config.resolve_legend(recordings_root=episode_directory.parent)
     episode_rng = random.Random(episode_directory.name)
     sampled_instructions = {}
     for label, definition in sorted(legend.phase_legend.items()):
@@ -136,11 +131,9 @@ def generate_dataset(config: DatasetGenerationConfig) -> BuildReport:
     recordings_root = Path(config.recordings_root)
     dataset_metadata = None
     if config.annotations is not None:
-        dataset_metadata = config.annotations.legend
-        if dataset_metadata is None:
-            dataset_metadata = DatasetMetadata.load(
-                path=recordings_root / config.annotations.metadata_file
-            )
+        dataset_metadata = config.annotations.resolve_legend(
+            recordings_root=recordings_root
+        )
     builder = DatasetBuilder(
         schema=config.dataset_schema,
         writer=config.writer.build(recordings_root=recordings_root),
