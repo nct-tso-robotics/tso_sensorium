@@ -41,7 +41,7 @@ def load_yaml_with_includes(path: Union[Path, str]) -> dict:
         pass
 
     YamlIncludeConstructor.add_to_loader_class(
-        loader_class=IncludeLoader, base_dir=str(config_path.parent)
+        loader_class=IncludeLoader, relative=True
     )
     with open(config_path) as config_file:
         return yaml.load(config_file, IncludeLoader)

@@ -6,6 +6,7 @@ import pytest
 
 from tso_sensorium.configuration import load_config, parse_config_from_cli
 from tso_sensorium.recording.config import (
+    RecordingServiceConfig,
     RecordingSessionConfig,
     TopicRecorderConfig,
     VideoRecorderConfig,
@@ -13,6 +14,9 @@ from tso_sensorium.recording.config import (
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 TSO_TESTBED_CONFIG = REPOSITORY_ROOT / "configs" / "recording" / "tso_testbed.yaml"
+TSO_TESTBED_SERVICE_CONFIG = (
+    REPOSITORY_ROOT / "configs" / "recording" / "tso_testbed_service.yaml"
+)
 
 
 @pytest.mark.unit
@@ -36,6 +40,19 @@ def test_shipped_tso_testbed_config_decodes():
     assert topic_recorders[0].message_type == "testbed_msgs.msg.RobotState"
     assert video_recorders[2].lossless_compression is True
     assert "/ur5e_rcm_twist_controller/RobotState" in config.rosbag_topics
+
+
+@pytest.mark.unit
+def test_shipped_tso_testbed_service_config_decodes_nested_includes():
+    config = load_config(
+        config_class=RecordingServiceConfig, config_path=TSO_TESTBED_SERVICE_CONFIG
+    )
+
+    assert config.session.output_folder == ""
+    assert len(config.session.recorders) == 8
+    assert config.generation is not None
+    assert config.generation.annotations is not None
+    assert config.generation.annotations.legend.dataset_name == "bowel_retraction"
 
 
 @pytest.mark.unit
