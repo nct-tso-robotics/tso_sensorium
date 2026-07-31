@@ -15,6 +15,7 @@ recorders:
     file_name: ur5e
     topic_name: /ur5e_rcm_twist_controller/RobotState
     message_type: testbed_msgs.msg.RobotState
+    queue_size: 100
     fields:
       - joints_state
       - robot_pose
@@ -83,5 +84,5 @@ recorders:
   - type: video
     file_name: laparoscope_combined
     topic_name: /stereo/camera_driver/image_raw
-    frames_per_second: 10
+    frames_per_second: 30
     lossless_compression: true

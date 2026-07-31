@@ -57,6 +57,7 @@ def build_recorder(
             frames_per_second=recorder_config.frames_per_second,
             topic_name=recorder_config.topic_name,
             lossless_compression=recorder_config.lossless_compression,
+            queue_size=recorder_config.queue_size,
         )
     if isinstance(recorder_config, TopicRecorderConfig):
         extractor = MessageFieldExtractor(fields=recorder_config.fields)
@@ -73,6 +74,7 @@ def build_recorder(
             message_type=resolve_message_type(dotted_path=recorder_config.message_type),
             csv_header=csv_header,
             get_cols_from_msg_func=extractor,
+            queue_size=recorder_config.queue_size,
         )
     raise TypeError(
         f"Unsupported recorder config type: {type(recorder_config).__name__}"

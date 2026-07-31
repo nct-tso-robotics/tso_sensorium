@@ -29,6 +29,7 @@ def test_shipped_bowel_retraction_config_decodes():
         config_class=DatasetGenerationConfig, config_path=BOWEL_RETRACTION_CONFIG
     )
     assert config.dataset_schema.name == "bowel_retraction"
+    assert config.dataset_schema.fps == 30
     assert [camera.name for camera in config.dataset_schema.cameras] == [
         "left",
         "right",

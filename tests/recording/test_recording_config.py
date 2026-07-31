@@ -38,6 +38,8 @@ def test_shipped_tso_testbed_config_decodes():
     assert len(topic_recorders) == 5
     assert len(video_recorders) == 3
     assert topic_recorders[0].message_type == "testbed_msgs.msg.RobotState"
+    assert topic_recorders[0].queue_size == 100
+    assert video_recorders[2].frames_per_second == 30
     assert video_recorders[2].lossless_compression is True
     assert "/ur5e_rcm_twist_controller/RobotState" in config.rosbag_topics
 

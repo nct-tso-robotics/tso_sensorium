@@ -11,7 +11,7 @@ sync_column: time
 
 schema:
   name: bowel_retraction
-  fps: 10
+  fps: 30
   task: null
   cameras:
     - name: left

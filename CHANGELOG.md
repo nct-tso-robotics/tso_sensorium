@@ -22,3 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (threshold and sequential-trigger).
 - Pydantic-validated YAML configuration with `!include` composition and
   dot-notation CLI overrides.
+
+### Changed
+
+- Record and export the combined endoscope stream at its nominal 30 fps instead
+  of encoding and describing the 30 Hz input as 10 fps.
+
+### Fixed
+
+- Crop independently started sensor streams to their shared timestamp range
+  before nearest-neighbor alignment. Startup and shutdown frames without a
+  corresponding state sample no longer discard an otherwise valid episode;
+  the configured tolerance still rejects synchronization gaps inside the
+  shared interval.
+- Make the ROS subscription queue depth configurable and retain 100 pending
+  robot-state messages in the testbed configuration, preventing the observed
+  500 Hz bursts from being reduced to the latest queued message.

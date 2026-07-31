@@ -21,10 +21,12 @@ class RecorderConfig(ConfigModel, abc.ABC):
     Args:
         file_name: Base name of the output files, without extension.
         topic_name: ROS topic to subscribe to.
+        queue_size: Pending messages retained when callbacks fall behind.
     """
 
     file_name: str = ""
     topic_name: str = ""
+    queue_size: int = Field(default=1, ge=1)
 
 
 class TopicRecorderConfig(RecorderConfig):

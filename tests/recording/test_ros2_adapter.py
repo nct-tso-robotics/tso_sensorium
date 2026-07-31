@@ -1,6 +1,7 @@
 """Tests for tso_sensorium.recording.ros2.record module."""
 
 import csv
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -20,6 +21,36 @@ from tso_sensorium.recording.ros2 import (  # noqa: E402
 MESSAGE_COUNT = 5
 FRAME_HEIGHT = 48
 FRAME_WIDTH = 64
+CSV_RECORDER_PATH = "tso_sensorium.recording.ros2.record.TimestampedCsvRecorder"
+
+
+@pytest.mark.unit
+def test_topic_recorder_uses_configured_subscription_queue() -> None:
+    node = MagicMock()
+    with patch(CSV_RECORDER_PATH) as csv_recorder_class:
+        recorder = RosTopicRecorder(
+            node=node,
+            output_folder="out",
+            file_name="state",
+            topic_name="/test/state",
+            message_type=String,
+            csv_header=["data"],
+            get_cols_from_msg_func=MagicMock(),
+            queue_size=100,
+        )
+        recorder.subscribe()
+        recorder.close()
+
+    node.create_subscription.assert_called_once_with(
+        String,
+        "/test/state",
+        recorder.callback,
+        100,
+    )
+    node.destroy_subscription.assert_called_once_with(
+        node.create_subscription.return_value
+    )
+    csv_recorder_class.return_value.close.assert_called_once_with()
 
 
 @pytest.fixture

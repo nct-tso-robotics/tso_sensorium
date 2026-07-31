@@ -101,13 +101,47 @@ class EpisodeGenerator:
     def generate_dataset(self) -> "EpisodeGenerator":
         """Align all data sources into a single episode table.
 
-        The first registered source provides the reference timestamps,
-        which are kept as the table's first column.
+        The first registered source provides the reference timestamps. Reference
+        rows outside the interval covered by every source are discarded before
+        nearest-neighbour alignment, since independently started subscriptions
+        do not receive their first and last messages at exactly the same time.
 
         Returns:
             Self, for method chaining.
         """
-        sync_col_data = self.data[0].get_sync_col_data()
+        if not self.data:
+            raise ValueError("Cannot generate a dataset without data sources")
+
+        source_sync_columns = [source.get_sync_col_data() for source in self.data]
+        empty_sources = [
+            source.state_data_path
+            for source, sync_column in zip(self.data, source_sync_columns)
+            if sync_column.empty
+        ]
+        if empty_sources:
+            raise ValueError(
+                f"Timestamp columns are empty for data sources: {empty_sources}."
+                " Discarding episode."
+            )
+
+        overlap_start = max(sync_column.min() for sync_column in source_sync_columns)
+        overlap_end = min(sync_column.max() for sync_column in source_sync_columns)
+        if overlap_start > overlap_end:
+            raise ValueError(
+                "Recorded data sources do not have an overlapping timestamp range."
+                " Discarding episode."
+            )
+
+        reference_sync_column = source_sync_columns[0]
+        sync_col_data = reference_sync_column[
+            reference_sync_column.between(overlap_start, overlap_end)
+        ].reset_index(drop=True)
+        if sync_col_data.empty:
+            raise ValueError(
+                "The reference data source has no samples in the shared timestamp"
+                " range. Discarding episode."
+            )
+
         dataframe = self.data[0].get_data(source_sync_dataframe=sync_col_data)
         for data in self.data[1:]:
             dataframe = pd.concat(

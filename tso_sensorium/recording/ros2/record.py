@@ -22,7 +22,6 @@ from tso_sensorium.recording.core import (
     image_buffer_to_bgr_frame,
 )
 
-QUEUE_DEPTH = 1
 NANOSECONDS_PER_SECOND = 1_000_000_000
 ROSBAG_DIRECTORY_NAME = "recording_bag"
 
@@ -41,6 +40,7 @@ class RosTopicRecorder:
         message_type: ROS message type class.
         csv_header: Column headers written after the time column.
         get_cols_from_msg_func: Extracts the row values from a message.
+        queue_size: Pending messages retained when the callback falls behind.
     """
 
     def __init__(
@@ -52,11 +52,13 @@ class RosTopicRecorder:
         message_type: type,
         csv_header: Sequence[str],
         get_cols_from_msg_func: Callable[[Any], Sequence[Any]],
+        queue_size: int = 1,
     ):
         self.node = node
         self.topic_name = topic_name
         self.message_type = message_type
         self.get_cols_from_msg_func = get_cols_from_msg_func
+        self.queue_size = queue_size
         self.subscription = None
         self.csv_recorder = TimestampedCsvRecorder(
             output_folder=output_folder,
@@ -67,7 +69,10 @@ class RosTopicRecorder:
     def subscribe(self) -> None:
         """Start receiving messages from the topic."""
         self.subscription = self.node.create_subscription(
-            self.message_type, self.topic_name, self.callback, QUEUE_DEPTH
+            self.message_type,
+            self.topic_name,
+            self.callback,
+            self.queue_size,
         )
 
     def _get_message_timestamp(self, msg: Any) -> int:
@@ -102,6 +107,7 @@ class VideoRecorder(RosTopicRecorder):
         topic_name: ROS topic publishing ``sensor_msgs/Image`` messages.
         lossless_compression: Whether to encode losslessly. Lossless files
             are considerably larger.
+        queue_size: Pending frames retained when the callback falls behind.
     """
 
     def __init__(
@@ -112,6 +118,7 @@ class VideoRecorder(RosTopicRecorder):
         frames_per_second: float,
         topic_name: str,
         lossless_compression: bool = False,
+        queue_size: int = 1,
     ):
         super().__init__(
             node=node,
@@ -121,6 +128,7 @@ class VideoRecorder(RosTopicRecorder):
             message_type=Image,
             csv_header=IMAGE_METADATA_HEADER,
             get_cols_from_msg_func=self._get_image_metadata,
+            queue_size=queue_size,
         )
         self.video_writer = VideoFileWriter(
             output_folder=output_folder,

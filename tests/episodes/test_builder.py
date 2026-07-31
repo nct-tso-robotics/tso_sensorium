@@ -73,27 +73,107 @@ class TestSourceRegistration:
 
 class TestGenerateDataset:
     @pytest.mark.unit
-    def test_aligns_all_sources_on_first_source_timestamps(self):
-        sync_series = pd.Series([0, 10])
+    def test_trims_reference_timestamps_to_shared_source_range(self):
+        reference_sync_series = pd.Series([-10, 0, 10, 20])
+        shared_sync_series = pd.Series([0, 10])
         first_source = MagicMock()
         first_source.sync_col_name = "time"
-        first_source.get_sync_col_data.return_value = sync_series
+        first_source.get_sync_col_data.return_value = reference_sync_series
         first_source.get_data.return_value = pd.DataFrame({"a": [1, 2]})
         second_source = MagicMock()
+        second_source.get_sync_col_data.return_value = shared_sync_series
         second_source.get_data.return_value = pd.DataFrame({"b": [3, 4]})
         generator = EpisodeGenerator()
         generator.data = [first_source, second_source]
 
         generator.generate_dataset()
 
-        second_source.get_sync_col_data.assert_not_called()
+        first_source.get_sync_col_data.assert_called_once_with()
+        second_source.get_sync_col_data.assert_called_once_with()
         first_sync = first_source.get_data.call_args.kwargs["source_sync_dataframe"]
         second_sync = second_source.get_data.call_args.kwargs["source_sync_dataframe"]
-        assert first_sync is sync_series
-        assert second_sync is sync_series
+        pd.testing.assert_series_equal(first_sync, shared_sync_series)
+        pd.testing.assert_series_equal(second_sync, shared_sync_series)
         pd.testing.assert_frame_equal(
             generator.dataset,
             pd.DataFrame({"time": [0, 10], "a": [1, 2], "b": [3, 4]}),
+        )
+
+    @pytest.mark.unit
+    def test_rejects_sources_without_an_overlapping_timestamp_range(self):
+        first_source = MagicMock()
+        first_source.get_sync_col_data.return_value = pd.Series([0, 10])
+        second_source = MagicMock()
+        second_source.get_sync_col_data.return_value = pd.Series([20, 30])
+        generator = EpisodeGenerator()
+        generator.data = [first_source, second_source]
+
+        with pytest.raises(
+            ValueError,
+            match=(
+                "Recorded data sources do not have an overlapping timestamp range."
+                " Discarding episode."
+            ),
+        ):
+            generator.generate_dataset()
+
+        first_source.get_data.assert_not_called()
+        second_source.get_data.assert_not_called()
+
+    @pytest.mark.unit
+    def test_rejects_generation_without_data_sources(self):
+        with pytest.raises(
+            ValueError,
+            match="Cannot generate a dataset without data sources",
+        ):
+            EpisodeGenerator().generate_dataset()
+
+    @pytest.mark.integration
+    def test_aligns_staggered_video_and_state_recordings(self, tmp_path):
+        camera_timestamps = [
+            0,
+            100_000_000,
+            200_000_000,
+            300_000_000,
+            400_000_000,
+            500_000_000,
+            600_000_000,
+        ]
+        robot_timestamps = list(range(400_000_000, 602_000_000, 2_000_000))
+        camera_path = tmp_path / "camera.csv"
+        robot_path = tmp_path / "robot.csv"
+        pd.DataFrame({"time": camera_timestamps}).to_csv(camera_path, index=False)
+        pd.DataFrame({"time": robot_timestamps, "position": robot_timestamps}).to_csv(
+            robot_path, index=False
+        )
+        generator = EpisodeGenerator()
+        generator.add_video(
+            video_path=tmp_path / "camera.avi",
+            timestamps_path=camera_path,
+            sync_col_name="time",
+            frames_output_path=tmp_path / "frames",
+            frame_col_name="frame",
+        ).add_state(
+            state_data_path=robot_path,
+            sync_col_name="time",
+            dataset_cols=["position"],
+        )
+
+        generator.generate_dataset()
+
+        pd.testing.assert_frame_equal(
+            generator.dataset,
+            pd.DataFrame(
+                {
+                    "time": [400_000_000, 500_000_000, 600_000_000],
+                    "frame": [
+                        tmp_path / "frames" / "4.png",
+                        tmp_path / "frames" / "5.png",
+                        tmp_path / "frames" / "6.png",
+                    ],
+                    "position": [400_000_000, 500_000_000, 600_000_000],
+                }
+            ),
         )
 
 
