@@ -17,6 +17,7 @@ from tso_sensorium.configuration import parse_config_from_cli
 import rospy
 
 from tso_sensorium.recording.config import RecordingServiceConfig
+from tso_sensorium.recording.network import dashboard_url
 from tso_sensorium.recording.ros1.web_service import (
     build_recording_service,
     create_app,
@@ -46,7 +47,10 @@ def run(config: RecordingServiceConfig) -> None:
 
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
-    print(f"Recording dashboard on http://{config.host}:{config.port}")
+    print(
+        "Recording dashboard on "
+        f"{dashboard_url(bind_host=config.host, port=config.port)}"
+    )
     app.run(host=config.host, port=config.port, threaded=True)
     service.close()
 

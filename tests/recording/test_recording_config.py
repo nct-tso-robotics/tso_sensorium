@@ -17,6 +17,12 @@ TSO_TESTBED_CONFIG = REPOSITORY_ROOT / "configs" / "recording" / "tso_testbed.ya
 TSO_TESTBED_SERVICE_CONFIG = (
     REPOSITORY_ROOT / "configs" / "recording" / "tso_testbed_service.yaml"
 )
+ENDOSCOPE_GUIDANCE_CONFIG = (
+    REPOSITORY_ROOT / "configs" / "recording" / "endoscope_guidance.yaml"
+)
+ENDOSCOPE_GUIDANCE_SERVICE_CONFIG = (
+    REPOSITORY_ROOT / "configs" / "recording" / "endoscope_guidance_service.yaml"
+)
 
 
 @pytest.mark.unit
@@ -55,6 +61,42 @@ def test_shipped_tso_testbed_service_config_decodes_nested_includes():
     assert config.generation is not None
     assert config.generation.annotations is not None
     assert config.generation.annotations.legend.dataset_name == "bowel_retraction"
+
+
+@pytest.mark.unit
+def test_shipped_endoscope_guidance_config_contains_only_guidance_streams():
+    config = load_config(
+        config_class=RecordingSessionConfig,
+        config_path=ENDOSCOPE_GUIDANCE_CONFIG,
+    )
+
+    assert [recorder.topic_name for recorder in config.recorders] == [
+        "/ur5e_rcm_twist_controller/RobotState",
+        "/robot_camera_transform",
+        "/laparoscope/camera/left/image_raw",
+        "/laparoscope/camera/right/image_raw",
+        "/stereo/camera_driver/image_raw",
+    ]
+    assert all(
+        excluded_topic not in config.rosbag_topics
+        for excluded_topic in (
+            "/koala_grasper/state",
+            "/pedal_board/state",
+            "/bota_force_sensor_state",
+        )
+    )
+
+
+@pytest.mark.unit
+def test_shipped_endoscope_guidance_service_uses_left_camera_preview():
+    config = load_config(
+        config_class=RecordingServiceConfig,
+        config_path=ENDOSCOPE_GUIDANCE_SERVICE_CONFIG,
+    )
+
+    assert config.camera_topic == "/laparoscope/camera/left/image_raw"
+    assert config.generation is None
+    assert config.session.output_folder == ""
 
 
 @pytest.mark.unit

@@ -1,0 +1,58 @@
+# Recording session for endoscope guidance with the camera-mounted robot.
+output_folder: ""
+episode_name: null
+record_rosbag: false
+rosbag_topics:
+  - /ur5e_rcm_twist_controller/RobotState
+  - /robot_camera_transform
+
+recorders:
+  - type: topic
+    file_name: camera_robot_state
+    topic_name: /ur5e_rcm_twist_controller/RobotState
+    message_type: testbed_msgs.msg.RobotState
+    queue_size: 100
+    fields:
+      - joints_state
+      - robot_pose
+      - end_effector_twist
+      - robot_space_tip_position
+      - robot_space_tip_twist
+      - robot_space_initial_tip_position
+      - robot_space_rcm_position
+      - relative_tip_position
+      - relative_pivot_RPY
+      - relative_pivot_translation
+      - robot_space_wrench
+
+  - type: topic
+    file_name: robot_camera_transform
+    topic_name: /robot_camera_transform
+    message_type: geometry_msgs.msg.TransformStamped
+    queue_size: 100
+    fields:
+      - transform.rotation.x
+      - transform.rotation.y
+      - transform.rotation.z
+      - transform.rotation.w
+    csv_header:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
+
+  - type: video
+    file_name: laparoscope_left
+    topic_name: /laparoscope/camera/left/image_raw
+    frames_per_second: 30.0
+
+  - type: video
+    file_name: laparoscope_right
+    topic_name: /laparoscope/camera/right/image_raw
+    frames_per_second: 30.0
+
+  - type: video
+    file_name: laparoscope_combined
+    topic_name: /stereo/camera_driver/image_raw
+    frames_per_second: 30.0
+    lossless_compression: true

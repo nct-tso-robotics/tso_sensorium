@@ -71,6 +71,7 @@ tso-generate-dataset = "tso_sensorium.scripts.generate_dataset:main"
 tso-label-phases = "tso_sensorium.scripts.label_phases:main"
 tso-mock-sensors = "tso_sensorium.scripts.mock_sensors:main"
 tso-mock-sensors-ros2 = "tso_sensorium.scripts.mock_sensors_ros2:main"
+tso-publish-camera-transform = "tso_sensorium.scripts.publish_robot_camera_transform:main"
 
 [project.urls]
 Repository = "https://github.com/nct-tso-robotics/tso_sensorium"
