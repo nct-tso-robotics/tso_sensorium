@@ -17,6 +17,8 @@ from tso_sensorium.recording.core import (
 CSV_WRITER_PATH = "tso_sensorium.recording.core.csv.writer"
 VIDEO_WRITER_PATH = "tso_sensorium.recording.core.cv2.VideoWriter"
 FOURCC_PATH = "tso_sensorium.recording.core.cv2.VideoWriter_fourcc"
+FFMPEG_PATH = "tso_sensorium.recording.core.shutil.which"
+SUBPROCESS_PATH = "tso_sensorium.recording.core.subprocess.run"
 
 
 @pytest.fixture
@@ -118,7 +120,7 @@ class TestVideoFileWriter:
             patch(VIDEO_WRITER_PATH) as video_writer_class,
             patch(FOURCC_PATH, return_value="fourcc_code") as fourcc,
         ):
-            writer.write_frame(frame=frame)
+            writer.write_frame(frame=frame, timestamp_nanoseconds=1_000_000_000)
         fourcc.assert_called_once_with(*expected_fourcc)
         video_writer_class.assert_called_once_with(
             str(Path("out", f"video.{expected_extension}")),
@@ -139,8 +141,12 @@ class TestVideoFileWriter:
             patch(VIDEO_WRITER_PATH) as video_writer_class,
             patch(FOURCC_PATH),
         ):
-            writer.write_frame(frame=frame_factory())
-            writer.write_frame(frame=frame_factory())
+            writer.write_frame(
+                frame=frame_factory(), timestamp_nanoseconds=1_000_000_000
+            )
+            writer.write_frame(
+                frame=frame_factory(), timestamp_nanoseconds=1_500_000_000
+            )
         assert video_writer_class.call_count == 1
         assert video_writer_class.return_value.write.call_count == 2
 
@@ -150,7 +156,9 @@ class TestVideoFileWriter:
             output_folder="out", file_name="video", frames_per_second=30.0
         )
         with patch(VIDEO_WRITER_PATH) as video_writer_class, patch(FOURCC_PATH):
-            writer.write_frame(frame=frame_factory())
+            writer.write_frame(
+                frame=frame_factory(), timestamp_nanoseconds=1_000_000_000
+            )
             writer.close()
         video_writer_class.return_value.release.assert_called_once_with()
 
@@ -164,20 +172,191 @@ class TestVideoFileWriter:
         video_writer_class.assert_not_called()
 
     @pytest.mark.integration
-    def test_round_trip_writes_readable_video(self, tmp_path, frame_factory):
+    @pytest.mark.parametrize(
+        "lossless_compression, expected_extension, expected_duration_seconds",
+        [
+            (False, "mp4", 1.03),
+            (True, "avi", 1.5),
+        ],
+    )
+    def test_round_trip_retimes_video_to_acquisition_duration(
+        self,
+        tmp_path,
+        frame_factory,
+        lossless_compression,
+        expected_extension,
+        expected_duration_seconds,
+    ):
         writer = VideoFileWriter(
-            output_folder=tmp_path, file_name="video", frames_per_second=30.0
+            output_folder=tmp_path,
+            file_name="video",
+            frames_per_second=30.0,
+            lossless_compression=lossless_compression,
         )
-        for _ in range(3):
-            writer.write_frame(frame=frame_factory(height=48, width=64))
+        for frame_index in range(3):
+            writer.write_frame(
+                frame=frame_factory(height=48, width=64),
+                timestamp_nanoseconds=frame_index * 500_000_000,
+            )
         writer.close()
-        capture = cv2.VideoCapture(str(tmp_path / "video.mp4"))
+        capture = cv2.VideoCapture(str(tmp_path / f"video.{expected_extension}"))
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        frames_per_second = capture.get(cv2.CAP_PROP_FPS)
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         capture.release()
         assert frame_count == 3
+        assert frame_count / frames_per_second == pytest.approx(
+            expected_duration_seconds, abs=0.05
+        )
         assert (width, height) == (64, 48)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "lossless_compression, expected_command",
+        [
+            (
+                False,
+                [
+                    "/usr/bin/ffmpeg",
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    "-itsscale",
+                    "15.0",
+                    "-i",
+                    str(Path("out", "video.mp4")),
+                    "-map",
+                    "0:v:0",
+                    "-c:v",
+                    "copy",
+                    "-an",
+                    str(Path("out", ".video.retimed.mp4")),
+                ],
+            ),
+            (
+                True,
+                [
+                    "/usr/bin/ffmpeg",
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    str(Path("out", "video.avi")),
+                    "-map",
+                    "0:v:0",
+                    "-c:v",
+                    "copy",
+                    "-r",
+                    "2.0",
+                    "-an",
+                    str(Path("out", ".video.retimed.avi")),
+                ],
+            ),
+        ],
+    )
+    def test_close_retimes_from_acquisition_timestamps_without_reencoding(
+        self,
+        frame_factory,
+        lossless_compression,
+        expected_command,
+    ):
+        writer = VideoFileWriter(
+            output_folder="out",
+            file_name="video",
+            frames_per_second=30.0,
+            lossless_compression=lossless_compression,
+        )
+        process_result = MagicMock(returncode=0, stderr="")
+        with (
+            patch(VIDEO_WRITER_PATH),
+            patch(FOURCC_PATH),
+            patch(FFMPEG_PATH, return_value="/usr/bin/ffmpeg"),
+            patch(SUBPROCESS_PATH, return_value=process_result) as run_process,
+            patch.object(Path, "replace") as replace,
+        ):
+            for frame_index in range(3):
+                writer.write_frame(
+                    frame=frame_factory(),
+                    timestamp_nanoseconds=frame_index * 500_000_000,
+                )
+            writer.close()
+
+        run_process.assert_called_once_with(
+            expected_command,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        replace.assert_called_once_with(writer.file_path)
+
+    @pytest.mark.unit
+    def test_close_preserves_original_when_retiming_fails(self, frame_factory):
+        writer = VideoFileWriter(
+            output_folder="out", file_name="video", frames_per_second=30.0
+        )
+        process_result = MagicMock(returncode=1, stderr="invalid video\n")
+        with (
+            patch(VIDEO_WRITER_PATH),
+            patch(FOURCC_PATH),
+            patch(FFMPEG_PATH, return_value="/usr/bin/ffmpeg"),
+            patch(SUBPROCESS_PATH, return_value=process_result),
+            patch.object(Path, "unlink") as unlink,
+            patch.object(Path, "replace") as replace,
+            pytest.raises(
+                RuntimeError,
+                match="Failed to retime video: invalid video",
+            ),
+        ):
+            for frame_index in range(2):
+                writer.write_frame(
+                    frame=frame_factory(),
+                    timestamp_nanoseconds=frame_index * 500_000_000,
+                )
+            writer.close()
+
+        unlink.assert_called_once_with(missing_ok=True)
+        replace.assert_not_called()
+
+    @pytest.mark.unit
+    def test_close_reports_missing_ffmpeg(self, frame_factory):
+        writer = VideoFileWriter(
+            output_folder="out", file_name="video", frames_per_second=30.0
+        )
+        with (
+            patch(VIDEO_WRITER_PATH),
+            patch(FOURCC_PATH),
+            patch(FFMPEG_PATH, return_value=None),
+            pytest.raises(
+                RuntimeError,
+                match="Cannot retime video because ffmpeg is not available.",
+            ),
+        ):
+            for frame_index in range(2):
+                writer.write_frame(
+                    frame=frame_factory(),
+                    timestamp_nanoseconds=frame_index * 500_000_000,
+                )
+            writer.close()
+
+    @pytest.mark.unit
+    def test_close_rejects_nonincreasing_timestamps(self, frame_factory):
+        writer = VideoFileWriter(
+            output_folder="out", file_name="video", frames_per_second=30.0
+        )
+        with (
+            patch(VIDEO_WRITER_PATH),
+            patch(FOURCC_PATH),
+            pytest.raises(
+                RuntimeError,
+                match=("Cannot retime video because frame timestamps do not increase."),
+            ),
+        ):
+            for _ in range(2):
+                writer.write_frame(
+                    frame=frame_factory(), timestamp_nanoseconds=1_000_000_000
+                )
+            writer.close()
 
 
 class TestImageBufferToBgrFrame:
@@ -206,7 +385,10 @@ class TestVideoFileWriterClose:
             output_folder=tmp_path, file_name="camera", frames_per_second=15
         )
         writer.close()
-        writer.write_frame(frame=np.zeros((8, 6, 3), dtype=np.uint8))
+        writer.write_frame(
+            frame=np.zeros((8, 6, 3), dtype=np.uint8),
+            timestamp_nanoseconds=1_000_000_000,
+        )
         assert not (tmp_path / "camera.mp4").exists()
 
 

@@ -13,8 +13,8 @@ from sensor_msgs.msg import Image  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 
 from tso_sensorium.recording.config import (  # noqa: E402
-    RecordingServiceConfig,
     RecordingSessionConfig,
+    RecordingUIConfig,
     TopicRecorderConfig,
 )
 from tso_sensorium.recording.ros2.web_service import (  # noqa: E402
@@ -41,7 +41,7 @@ def service_factory(ros_node, tmp_path):
     services = []
 
     def factory():
-        config = RecordingServiceConfig(
+        config = RecordingUIConfig(
             session=RecordingSessionConfig(
                 output_folder=str(tmp_path / "episodes"),
                 recorders=[
@@ -136,7 +136,7 @@ def test_camera_feed_and_stream(service_factory, ros_node):
 
 
 @pytest.mark.integration
-def test_output_folder_switching(service_factory, tmp_path):
+def test_output_folder_switching(service_factory, ros_node, tmp_path):
     service = service_factory()
     client = create_app(service=service).test_client()
 
@@ -152,7 +152,15 @@ def test_output_folder_switching(service_factory, tmp_path):
     )
     assert missing.status_code == 400
 
-    client.post("/api/recording/start", json={"episode_name": "ep_locked"})
+    state_publisher = ros_node.create_publisher(String, STATE_TOPIC, QUEUE_DEPTH)
+    _publish_until(
+        node=ros_node,
+        publisher=state_publisher,
+        message=String(data="readiness_probe"),
+        condition=lambda: service.liveness.is_alive(topic_name=STATE_TOPIC),
+    )
+    started = client.post("/api/recording/start", json={"episode_name": "ep_locked"})
+    assert started.status_code == 200
     locked = client.post("/api/recording/output_folder", json={"path": str(other)})
     assert locked.status_code == 409
     client.post("/api/recording/stop", json={})

@@ -1,4 +1,4 @@
-# Recording dashboard against the synthetic sensors from
+# Recording UI against the synthetic sensors from
 # tso_sensorium.scripts.mock_sensors — try the full record/browse/replay/
 # generate loop without a robot.
 host: 0.0.0.0

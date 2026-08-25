@@ -60,7 +60,7 @@ The following commands can then use the real testbed configuration:
 ```bash
 python -m tso_sensorium.scripts.record \
     --config_path configs/recording/tso_testbed.yaml \
-    --output_folder /data/recordings
+    --output_folder "$HOME/tso_sensorium_recordings"
 pytest tests/recording/test_ros1_adapter.py
 ```
 
@@ -108,7 +108,7 @@ pip install -e ".[test]"      # + pytest
 Python requirements: 3.9+ (the pydantic-backed config layer); LeRobot
 export additionally needs 3.10+. Extras combine as usual, e.g.
 `pip install -e ".[gui,test]"`. After install the scripts are available
-as console commands (`tso-record`, `tso-record-service`, `tso-annotate`,
+as console commands (`tso-record`, `tso-record-ui`, `tso-annotate`,
 `tso-generate-dataset`, `tso-label-phases`, and the `*-ros2` variants),
 equivalent to the `python -m tso_sensorium.scripts.*` forms used below.
 
@@ -146,7 +146,7 @@ apply everywhere:
   to `type` are the variant's own options.
 - **Configs compose with `!include`**, resolved relative to the including
   file. This keeps shared pieces in one place, e.g.
-  `configs/recording/mock_service.yaml` includes
+  `configs/recording/mock_ui.yaml` includes
   `configs/dataset/mock.yaml` as its `generation:` section, and the same
   file is included by `configs/annotation/mock.yaml`.
 - **Calibration files packaged with the library** can be referenced as
@@ -193,18 +193,28 @@ export TESTBED_WORKSPACE=/path/to/robot_testbed
 export PYTHONPATH="$TESTBED_WORKSPACE/devel/lib/python3/dist-packages"
 python -m tso_sensorium.scripts.record \
     --config_path configs/recording/tso_testbed.yaml \
-    --output_folder /data/recordings
+    --output_folder "$HOME/tso_sensorium_recordings"
 ```
 
-For interactive sessions, `record_service` keeps a recording service running
-and serves a browser dashboard (requires the `gui` extra):
+For interactive sessions, `record_ui` runs the browser UI (requires the `gui`
+extra):
 
 ```bash
 export TESTBED_WORKSPACE=/path/to/robot_testbed
 export PYTHONPATH="$TESTBED_WORKSPACE/devel/lib/python3/dist-packages"
-python -m tso_sensorium.scripts.record_service \
-    --config_path configs/recording/tso_testbed_service.yaml \
-    --session.output_folder /data/recordings
+python -m tso_sensorium.scripts.record_ui \
+    --config_path configs/recording/tso_testbed_ui.yaml \
+    --session.output_folder "$HOME/tso_sensorium_recordings"
+```
+
+For the force-sensing setup, the bundled UI config records UR5e state,
+the left, right, and combined endoscope streams, the robot-camera transform,
+and the Bota wrench and IMU topics. It saves under
+`~/tso_sensorium_recordings` by default:
+
+```bash
+python -m tso_sensorium.scripts.record_ui \
+    --config_path configs/recording/force_session_ui.yaml
 ```
 
 Open `http://<host>:8080` from any machine on the network. The dashboard
@@ -240,22 +250,22 @@ python -m tso_sensorium.scripts.mock_sensors
 Open a third terminal, enter `pixi shell -e ros1`, and start the dashboard:
 
 ```bash
-python -m tso_sensorium.scripts.record_service \
-    --config_path configs/recording/mock_service.yaml
+python -m tso_sensorium.scripts.record_ui \
+    --config_path configs/recording/mock_ui.yaml
 ```
 
 ROS may warn when `~/.ros/log` exceeds 1 GB. Inspect it with `rosclean check`;
 run `rosclean purge` only if deleting old ROS logs is acceptable.
 
-The same dashboard runs on ROS 2 (`record_service_ros2`,
+The same dashboard runs on ROS 2 (`record_ui_ros2`,
 `mock_sensors_ros2`) with identical configs — recorder entries reference
 message types by dotted path (`std_msgs.msg.Bool`), which resolve to the
 ROS 2 classes inside a ROS 2 environment:
 
 ```bash
 python -m tso_sensorium.scripts.mock_sensors_ros2 &
-python -m tso_sensorium.scripts.record_service_ros2 \
-    --config_path configs/recording/mock_service.yaml
+python -m tso_sensorium.scripts.record_ui_ros2 \
+    --config_path configs/recording/mock_ui.yaml
 ```
 
 ### Annotation and dataset studio (no ROS required)

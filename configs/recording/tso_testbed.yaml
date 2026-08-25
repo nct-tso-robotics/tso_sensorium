@@ -1,4 +1,4 @@
-# Recording session for the TSO testbed (UR5e + STORZ endoscope).
+# Recording session for the TSO testbed without the Bota sensor.
 # Disable a stream by removing or commenting its entry.
 output_folder: ""
 episode_name: null
@@ -6,7 +6,6 @@ record_rosbag: false
 rosbag_topics:
   - /ur5e_rcm_twist_controller/RobotState
   - /robot_camera_transform
-  - /bota_force_sensor_state
   - /koala_grasper/state
   - /pedal_board/state
 
@@ -23,13 +22,17 @@ recorders:
       - relative_tip_position
       - robot_space_rcm_position
       - robot_space_wrench
+      - relative_pivot_RPY
+      - relative_pivot_translation
     csv_header:
-      - jointsState
+      - joints_state
       - robot_pose
       - robot_space_initial_tip_position
       - relative_tip_position
       - robot_space_rcm_position
       - robot_space_wrench
+      - relative_pivot_rpy
+      - relative_pivot_translation
 
   - type: topic
     file_name: robot_camera_transform
@@ -47,21 +50,17 @@ recorders:
       - quaternion_w
 
   - type: topic
-    file_name: bota_force_sensor
-    topic_name: /bota_force_sensor_state
-    message_type: testbed_msgs.msg.ForceSensorState
-    fields: [wrench, temperature, imu, throttled, overrange, invalid]
-
-  - type: topic
     file_name: koala_grasp
     topic_name: /koala_grasper/state
     message_type: testbed_msgs.msg.KoalaCommand
+    required: false
     fields: [open]
 
   - type: topic
     file_name: pedal_board
     topic_name: /pedal_board/state
     message_type: testbed_msgs.msg.PedalBoardState
+    required: false
     fields:
       - right_blue_pedal
       - left_blue_pedal
@@ -84,5 +83,5 @@ recorders:
   - type: video
     file_name: laparoscope_combined
     topic_name: /stereo/camera_driver/image_raw
-    frames_per_second: 30
+    frames_per_second: 10
     lossless_compression: true

@@ -143,6 +143,8 @@
   .episode-header .name { font-family: var(--mono); font-size: 13px; font-weight: 600; }
   .episode-header .when { margin-left: auto; color: var(--muted); font-size: 11px; font-family: var(--font); }
   .episode-header a.annotate { color: var(--gold); text-decoration: none; font-size: 14px; }
+  .episode-header .delete-episode { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 2px; }
+  .episode-header .delete-episode:hover { color: var(--red); }
   .files { display: none; padding: 4px 18px 13px 38px; }
   .episode.open .files { display: block; }
   .file { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
@@ -385,8 +387,7 @@ function renderSensors() {
 }
 
 async function refreshStatus() {
-  const response = await fetch("/api/status");
-  const status = await response.json();
+  const status = await requestJson("/api/status");
   state.recording = status.state === "recording";
   document.querySelector("header").classList.toggle("recording", state.recording);
   state.sensors = status.sensors;
@@ -471,7 +472,8 @@ async function refreshEpisodes() {
     entry.innerHTML =
       `<div class="episode-header"><span class="chevron">&#9654;</span>` +
       `<span class="name">${episode.name}</span>` + annotateLink +
-      `<span class="when">${formatWhen(episode.modified_timestamp)}</span></div>` +
+      `<span class="when">${formatWhen(episode.modified_timestamp)}</span>` +
+      `<button class="delete-episode" title="delete episode">&times;</button></div>` +
       `<div class="files">${files}</div>`;
     entry.querySelector(".episode-header").addEventListener("click", () => entry.classList.toggle("open"));
     const annotateButton = entry.querySelector("a.annotate");
@@ -482,6 +484,19 @@ async function refreshEpisodes() {
         openAnnotator(episode.name, `/episodes/${episode.name}/${firstPlayable.name}/playback`);
       });
     }
+    entry.querySelector(".delete-episode").addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!confirm(`Delete episode "${episode.name}" and all of its files?`)) return;
+      try {
+        await requestJson(`/api/episodes/${encodeURIComponent(episode.name)}`, {
+          method: "DELETE",
+        });
+        await refreshEpisodes();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
     for (const playLink of entry.querySelectorAll("a.play")) {
       playLink.addEventListener("click", (event) => {
         event.preventDefault();
@@ -497,14 +512,48 @@ async function refreshEpisodes() {
 }
 
 async function post(url, body) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {}),
-  });
-  const payload = await response.json();
-  if (!response.ok) alert(payload.error || "Request failed");
-  return response.ok;
+  try {
+    await requestJson(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    return true;
+  } catch (error) {
+    document.getElementById("hint").textContent = error.message;
+    alert(error.message);
+    return false;
+  }
+}
+
+async function requestJson(url, options) {
+  const response = await fetch(url, options);
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json")
+    ? await response.json()
+    : null;
+  if (!response.ok) {
+    const message = payload && payload.error
+      ? payload.error
+      : `Request failed (${response.status})`;
+    throw new Error(message);
+  }
+  return payload;
+}
+
+async function switchOutputFolder(path) {
+  try {
+    await requestJson("/api/recording/output_folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    await refreshStatus();
+    await refreshEpisodes();
+    await loadLegend();
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
 document.getElementById("record").addEventListener("click", async () => {
@@ -755,12 +804,23 @@ document.getElementById("root-scan").addEventListener("click", async () => {
 const dirPicker = { path: null, onSelect: null };
 
 async function loadPickerDirectory(path) {
-  const response = await fetch(`/api/library/directories?path=${encodeURIComponent(path)}`);
-  const payload = await response.json();
-  if (!response.ok) return;
+  const list = document.getElementById("dir-list");
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  let payload;
+  try {
+    payload = await requestJson(`/api/library/directories?path=${encodeURIComponent(path)}`);
+  } catch (error) {
+    dirPicker.path = null;
+    document.getElementById("dir-current").textContent = path;
+    list.innerHTML = "";
+    const message = document.createElement("div");
+    message.className = "empty";
+    message.textContent = error.message;
+    list.appendChild(message);
+    return;
+  }
   dirPicker.path = payload.path;
   document.getElementById("dir-current").textContent = payload.path;
-  const list = document.getElementById("dir-list");
   list.innerHTML = "";
   const entries = payload.parent ? [["..", payload.parent]] : [];
   for (const name of payload.directories) {
@@ -791,20 +851,7 @@ document.getElementById("dir-select").addEventListener("click", () => {
 
 document.getElementById("change-output-folder").addEventListener("click", () => {
   const current = document.getElementById("output-folder-display").textContent || "/";
-  openDirectoryPicker(current, async (path) => {
-    const response = await fetch("/api/recording/output_folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path }),
-    });
-    const payload = await response.json();
-    if (!response.ok) {
-      alert(payload.error || "Could not switch folder");
-      return;
-    }
-    refreshEpisodes();
-    loadLegend();
-  });
+  openDirectoryPicker(current, switchOutputFolder);
 });
 
 document.getElementById("root-browse").addEventListener("click", () => {

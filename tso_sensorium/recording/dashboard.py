@@ -8,13 +8,18 @@ liveness monitor, camera feed, and episode session factory.
 from __future__ import annotations
 
 import threading
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Iterator, Optional, Protocol
 
 from flask import Flask, Response, jsonify, request
 
-from tso_sensorium.recording.config import RecordingServiceConfig
+from tso_sensorium.recording.config import (
+    RecorderConfig,
+    RecordingUIConfig,
+    VideoRecorderConfig,
+)
 from tso_sensorium.recording.library_service import (
     LibraryService,
     register_dashboard_route,
@@ -27,6 +32,8 @@ RECORDING_STATE = "recording"
 MJPEG_BOUNDARY = "frame"
 MJPEG_FRAME_INTERVAL_SECONDS = 0.05
 MJPEG_KEEPALIVE_SECONDS = 2.0
+OUTPUT_FOLDER_PROBE_PREFIX = ".tso_sensorium_write_probe_"
+VIDEO_READINESS_GRACE_MULTIPLIER = 5.0
 
 
 class LivenessMonitor(Protocol):
@@ -74,16 +81,19 @@ class RecordingService:
 
     def __init__(
         self,
-        config: RecordingServiceConfig,
+        config: RecordingUIConfig,
         liveness: LivenessMonitor,
         camera_feed: Optional[LatestFrameFeed],
         session_factory: SessionFactory,
-    ):
+    ) -> None:
+        output_folder = Path(config.session.output_folder).expanduser().resolve()
+        output_folder.mkdir(parents=True, exist_ok=True)
+        config.session.output_folder = str(output_folder)
         self.config = config
         self.liveness = liveness
         self.camera_feed = camera_feed
         self.library = LibraryService(
-            recordings_root=config.session.output_folder,
+            recordings_root=output_folder,
             generation=config.generation,
         )
         self._session_factory = session_factory
@@ -100,6 +110,11 @@ class RecordingService:
                 "topic": recorder.topic_name,
                 "alive": self.liveness.is_alive(topic_name=recorder.topic_name),
                 "last_message_age": ages.get(recorder.topic_name),
+                "required": recorder.required,
+                "ready": self._recorder_is_ready(
+                    recorder=recorder,
+                    last_message_age=ages.get(recorder.topic_name),
+                ),
             }
             for recorder in self.config.session.recorders
         ]
@@ -140,11 +155,94 @@ class RecordingService:
                 raise RuntimeError("Already recording")
             if self.library.generation_running():
                 raise RuntimeError("Dataset generation is running")
-            session = self._session_factory(episode_name, recorder_names)
+            selected_recorders = self._select_recorders(recorder_names=recorder_names)
+            self._validate_recorder_readiness(recorders=selected_recorders)
+            self._validate_output_folder_writable(
+                output_folder=Path(self.config.session.output_folder)
+            )
+            session = self._session_factory(
+                episode_name=episode_name,
+                recorder_names=recorder_names,
+            )
             session.start()
             self._session = session
             self._session_started_at = time.monotonic()
             return {"episode_name": session.episode_name}
+
+    def _select_recorders(
+        self, recorder_names: Optional[list[str]]
+    ) -> list[RecorderConfig]:
+        """Resolve and validate the recorder subset requested by the client."""
+        available = {
+            recorder.file_name: recorder for recorder in self.config.session.recorders
+        }
+        if recorder_names is None:
+            selected = list(available.values())
+        else:
+            duplicate_names = sorted(
+                name for name in set(recorder_names) if recorder_names.count(name) > 1
+            )
+            if duplicate_names:
+                raise ValueError(f"Duplicate recorder names: {duplicate_names}")
+            unknown_names = sorted(
+                name for name in recorder_names if name not in available
+            )
+            if unknown_names:
+                raise ValueError(f"Unknown recorder names: {unknown_names}")
+            selected = [available[name] for name in recorder_names]
+        if not selected and not self.config.session.record_rosbag:
+            raise ValueError("At least one recorder must be selected")
+        return selected
+
+    def _validate_recorder_readiness(self, recorders: list[RecorderConfig]) -> None:
+        """Reject a start that would create empty required data sources."""
+        ages = self.liveness.snapshot()
+        unavailable = []
+        for recorder in recorders:
+            if not recorder.required:
+                continue
+            age = ages.get(recorder.topic_name)
+            if self._recorder_is_ready(
+                recorder=recorder,
+                last_message_age=age,
+            ):
+                continue
+            reason = (
+                "no messages received"
+                if age is None
+                else f"last message {age:.3f} seconds ago"
+            )
+            unavailable.append(
+                f"{recorder.file_name} ({recorder.topic_name}: {reason})"
+            )
+        if unavailable:
+            raise RuntimeError(
+                "Required recording sources are unavailable: " + ", ".join(unavailable)
+            )
+
+    def _recorder_is_ready(
+        self,
+        recorder: RecorderConfig,
+        last_message_age: Optional[float],
+    ) -> bool:
+        """Whether a recorder has enough evidence to start safely."""
+        if last_message_age is None:
+            return False
+        if isinstance(recorder, VideoRecorderConfig):
+            return (
+                last_message_age
+                < self.config.staleness_seconds * VIDEO_READINESS_GRACE_MULTIPLIER
+            )
+        return self.liveness.is_alive(topic_name=recorder.topic_name)
+
+    @staticmethod
+    def _validate_output_folder_writable(output_folder: Path) -> None:
+        """Verify that an episode can create files in the output folder."""
+        with tempfile.TemporaryFile(
+            dir=output_folder,
+            prefix=OUTPUT_FOLDER_PROBE_PREFIX,
+        ):
+            pass
 
     def set_output_folder(self, path: str) -> dict:
         """Point new episodes and the library at a different folder.
@@ -158,12 +256,13 @@ class RecordingService:
         with self._lock:
             if self._session is not None:
                 raise RuntimeError("Cannot change the output folder while recording")
-        root = Path(path).expanduser()
-        if not root.is_dir():
-            raise ValueError(f"Not a directory: {path}")
-        self.config.session.output_folder = str(root)
-        self.library.set_root(recordings_root=root)
-        return {"output_folder": str(root)}
+            root = Path(path).expanduser().resolve()
+            if not root.is_dir():
+                raise ValueError(f"Not a directory: {path}")
+            self._validate_output_folder_writable(output_folder=root)
+            self.config.session.output_folder = str(root)
+            self.library.set_root(recordings_root=root)
+            return {"output_folder": str(root)}
 
     def stop_recording(self) -> dict:
         """Stop the running episode and finalize its files."""
@@ -175,6 +274,13 @@ class RecordingService:
             self._session_started_at = None
         session.close()
         return {"episode_name": session.episode_name}
+
+    def delete_episode(self, episode_name: str) -> dict[str, str]:
+        """Delete an episode unless it is currently being recorded."""
+        with self._lock:
+            if self._session is not None and self._session.episode_name == episode_name:
+                raise RuntimeError("Cannot delete the episode currently recording")
+            return self.library.delete_episode(episode_name=episode_name)
 
     def close(self) -> None:
         """Stop any running episode and release all subscriptions."""
@@ -201,7 +307,11 @@ def create_app(service: RecordingService) -> Flask:
     app = Flask(__name__)
     register_error_handlers(app=app)
     register_dashboard_route(app=app)
-    register_library_routes(app=app, library=service.library)
+    register_library_routes(
+        app=app,
+        library=service.library,
+        episode_deleter=service.delete_episode,
+    )
 
     @app.get("/api/status")
     def status():

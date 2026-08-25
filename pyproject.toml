@@ -55,7 +55,7 @@ lerobot = [
     "lerobot>=0.4.4",
 ]
 gui = [
-    # Browser dashboard for the recording service.
+    # Browser recording UI.
     "flask>=3.0",
 ]
 test = [
@@ -64,8 +64,8 @@ test = [
 
 [project.scripts]
 tso-record = "tso_sensorium.scripts.record:main"
-tso-record-service = "tso_sensorium.scripts.record_service:main"
-tso-record-service-ros2 = "tso_sensorium.scripts.record_service_ros2:main"
+tso-record-ui = "tso_sensorium.scripts.record_ui:main"
+tso-record-ui-ros2 = "tso_sensorium.scripts.record_ui_ros2:main"
 tso-annotate = "tso_sensorium.scripts.annotate:main"
 tso-generate-dataset = "tso_sensorium.scripts.generate_dataset:main"
 tso-label-phases = "tso_sensorium.scripts.label_phases:main"

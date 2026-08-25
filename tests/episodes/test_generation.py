@@ -53,9 +53,15 @@ def _write_synthetic_recording(episode_directory: Path, frame_count: int) -> Non
             file_name=f"laparoscope_{camera}",
             frames_per_second=30.0,
         )
-        for _ in range(frame_count):
+        for timestamp_nanoseconds in timestamps:
             video_writer.write_frame(
-                frame=frame_rng.integers(0, 255, size=(540, 960, 3), dtype=np.uint8)
+                frame=frame_rng.integers(
+                    0,
+                    255,
+                    size=(540, 960, 3),
+                    dtype=np.uint8,
+                ),
+                timestamp_nanoseconds=timestamp_nanoseconds,
             )
         video_writer.close()
         pd.DataFrame({"time": timestamps}).to_csv(

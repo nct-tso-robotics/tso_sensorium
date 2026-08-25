@@ -15,7 +15,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 
 from tso_sensorium.recording.config import (
-    RecordingServiceConfig,
+    RecordingUIConfig,
     TopicRecorderConfig,
 )
 from tso_sensorium.recording.dashboard import RecordingService, create_app
@@ -29,9 +29,7 @@ from tso_sensorium.recording.ros2.session import EpisodeSession
 __all__ = ["RecordingService", "build_recording_service", "create_app"]
 
 
-def build_recording_service(
-    node: Node, config: RecordingServiceConfig
-) -> RecordingService:
+def build_recording_service(node: Node, config: RecordingUIConfig) -> RecordingService:
     """Assemble the recording service from ROS 2 components.
 
     Args:
