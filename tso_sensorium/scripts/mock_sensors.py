@@ -1,7 +1,7 @@
 """Synthetic ROS 1 sensors for trying the recording stack without hardware.
 
 Publishes a moving test-pattern camera, a circular tool pose, and a
-toggling gripper, matching ``configs/recording/mock_service.yaml``:
+toggling gripper, matching ``configs/recording/mock_ui.yaml``:
 
     python -m tso_sensorium.scripts.mock_sensors
 """

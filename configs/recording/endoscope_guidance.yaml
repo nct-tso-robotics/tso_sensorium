@@ -1,43 +1,47 @@
-# Recording session for the TSO testbed without the Bota sensor.
-# Disable a stream by removing or commenting its entry.
+# Recording session for endoscope guidance with the camera-mounted robot.
 output_folder: ""
 episode_name: null
 record_rosbag: false
 rosbag_topics:
   - /ur5e_rcm_twist_controller/RobotState
   - /robot_camera_transform
-  - /koala_grasper/state
-  - /pedal_board/state
 
 recorders:
   - type: topic
-    file_name: ur5e
+    file_name: camera_robot_state
     topic_name: /ur5e_rcm_twist_controller/RobotState
     message_type: testbed_msgs.msg.RobotState
     queue_size: 100
     fields:
       - joints_state
       - robot_pose
+      - end_effector_twist
+      - robot_space_tip_position
+      - robot_space_tip_twist
       - robot_space_initial_tip_position
-      - relative_tip_position
       - robot_space_rcm_position
-      - robot_space_wrench
+      - relative_tip_position
       - relative_pivot_RPY
       - relative_pivot_translation
+      - robot_space_wrench
     csv_header:
       - joints_state
       - robot_pose
+      - end_effector_twist
+      - robot_space_tip_position
+      - robot_space_tip_twist
       - robot_space_initial_tip_position
-      - relative_tip_position
       - robot_space_rcm_position
-      - robot_space_wrench
+      - relative_tip_position
       - relative_pivot_rpy
       - relative_pivot_translation
+      - robot_space_wrench
 
   - type: topic
     file_name: robot_camera_transform
     topic_name: /robot_camera_transform
     message_type: geometry_msgs.msg.TransformStamped
+    queue_size: 100
     fields:
       - transform.rotation.x
       - transform.rotation.y
@@ -49,39 +53,18 @@ recorders:
       - quaternion_z
       - quaternion_w
 
-  - type: topic
-    file_name: koala_grasp
-    topic_name: /koala_grasper/state
-    message_type: testbed_msgs.msg.KoalaCommand
-    required: false
-    fields: [open]
-
-  - type: topic
-    file_name: pedal_board
-    topic_name: /pedal_board/state
-    message_type: testbed_msgs.msg.PedalBoardState
-    required: false
-    fields:
-      - right_blue_pedal
-      - left_blue_pedal
-      - right_yellow_pedal
-      - left_yellow_pedal
-      - top_grey_pedal
-      - bottom_grey_pedal
-      - flap
-
   - type: video
     file_name: laparoscope_left
     topic_name: /laparoscope/camera/left/image_raw
-    frames_per_second: 30
+    frames_per_second: 30.0
 
   - type: video
     file_name: laparoscope_right
     topic_name: /laparoscope/camera/right/image_raw
-    frames_per_second: 30
+    frames_per_second: 30.0
 
   - type: video
     file_name: laparoscope_combined
     topic_name: /stereo/camera_driver/image_raw
-    frames_per_second: 10
+    frames_per_second: 10.0
     lossless_compression: true

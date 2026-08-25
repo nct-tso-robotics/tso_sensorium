@@ -26,7 +26,7 @@ export ROS_MASTER_URI="http://localhost:${ROS_PORT}"
 mkdir -p "$LOG_DIR"
 cd "$REPO_DIR"
 
-echo "== Cleaning stale services"
+echo "== Cleaning stale processes"
 fuser -k ${DASHBOARD_PORT}/tcp 2>/dev/null || true
 fuser -k ${ANNOTATOR_PORT}/tcp 2>/dev/null || true
 # Always restart the mock sensors: a leftover publisher attached to a
@@ -51,10 +51,10 @@ echo "== mock sensors"
 nohup pixi run -e ros1 python -m tso_sensorium.scripts.mock_sensors \
   > "$LOG_DIR/mock_sensors.log" 2>&1 &
 
-echo "== recording dashboard (:${DASHBOARD_PORT})"
-nohup pixi run -e ros1 python -m tso_sensorium.scripts.record_service \
-  --config_path configs/recording/mock_service.yaml \
-  > "$LOG_DIR/record_service.log" 2>&1 &
+echo "== recording UI (:${DASHBOARD_PORT})"
+nohup pixi run -e ros1 python -m tso_sensorium.scripts.record_ui \
+  --config_path configs/recording/mock_ui.yaml \
+  > "$LOG_DIR/record_ui.log" 2>&1 &
 
 echo "== annotator (:${ANNOTATOR_PORT})"
 nohup env PYTHONPATH="$REPO_DIR" "$LEROBOT_PYTHON" -m tso_sensorium.scripts.annotate \
@@ -69,7 +69,7 @@ wait_healthy() {
   done
   echo "!! $name did not answer at $url"; tail -25 "$log"; exit 1
 }
-wait_healthy "dashboard" "http://localhost:${DASHBOARD_PORT}/api/status" "$LOG_DIR/record_service.log"
+wait_healthy "recording UI" "http://localhost:${DASHBOARD_PORT}/api/status" "$LOG_DIR/record_ui.log"
 wait_healthy "annotator" "http://localhost:${ANNOTATOR_PORT}/api/status" "$LOG_DIR/annotate.log"
 
 echo "== waiting for live sensors"
@@ -81,7 +81,7 @@ for _ in $(seq 1 15); do
   sleep 2
 done
 if [ "$ALIVE" != "3" ]; then
-  echo "!! only $ALIVE/3 sensors alive — service log:"; tail -30 "$LOG_DIR/record_service.log"; exit 1
+  echo "!! only $ALIVE/3 sensors alive — UI log:"; tail -30 "$LOG_DIR/record_ui.log"; exit 1
 fi
 
 NODE_IP=$(hostname -I | awk '{print $1}')

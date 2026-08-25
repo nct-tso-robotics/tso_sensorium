@@ -22,6 +22,7 @@ from tso_sensorium.recording.library_service import (
     LibraryService,
     create_library_app,
 )
+from tso_sensorium.recording.network import dashboard_url
 
 
 def run(config: LibraryAppConfig) -> None:
@@ -38,7 +39,10 @@ def run(config: LibraryAppConfig) -> None:
         generation=config.generation,
     )
     app = create_library_app(library=library)
-    print(f"Annotation dashboard on http://{config.host}:{config.port}")
+    print(
+        "Annotation dashboard on "
+        f"{dashboard_url(bind_host=config.host, port=config.port)}"
+    )
     app.run(host=config.host, port=config.port, threaded=True)
 
 

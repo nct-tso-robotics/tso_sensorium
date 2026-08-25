@@ -1,6 +1,8 @@
 """Tests for tso_sensorium.recording.library_service module."""
 
 import time
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -129,6 +131,45 @@ def test_directory_listing(library_client_factory, tmp_path):
 
     missing = client.get(f"/api/library/directories?path={root / 'nope'}")
     assert missing.status_code == 400
+
+
+@pytest.mark.unit
+def test_directory_listing_reports_filesystem_error(library_client_factory):
+    client, root = library_client_factory()
+    error_message = f"Permission denied: {root}"
+
+    with patch.object(Path, "iterdir", side_effect=PermissionError(error_message)):
+        response = client.get(f"/api/library/directories?path={root}")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": error_message}
+
+
+@pytest.mark.integration
+def test_episode_deletion_removes_only_selected_episode(library_client_factory):
+    client, root = library_client_factory()
+    selected = root / "selected"
+    selected.mkdir()
+    (selected / "state.csv").write_text("time,state\n1,ready\n")
+    retained = root / "retained"
+    retained.mkdir()
+
+    response = client.delete("/api/episodes/selected")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"deleted": "selected"}
+    assert not selected.exists()
+    assert retained.is_dir()
+
+
+@pytest.mark.integration
+def test_episode_deletion_rejects_missing_episode(library_client_factory):
+    client, _ = library_client_factory()
+
+    response = client.delete("/api/episodes/missing")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Episode not found: missing"}
 
 
 @pytest.mark.unit

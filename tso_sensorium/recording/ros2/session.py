@@ -103,7 +103,7 @@ class EpisodeSession:
         self.episode_name = (
             episode_name if episode_name else generate_time_based_string()
         )
-        self.output_folder = Path(config.output_folder, self.episode_name)
+        self.output_folder = Path(config.output_folder).expanduser() / self.episode_name
         selected_configs = self._select_recorders(
             config=config, recorder_names=recorder_names
         )

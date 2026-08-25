@@ -22,11 +22,14 @@ class RecorderConfig(ConfigModel, abc.ABC):
         file_name: Base name of the output files, without extension.
         topic_name: ROS topic to subscribe to.
         queue_size: Pending messages retained when callbacks fall behind.
+        required: Whether recording must refuse to start when this source
+            is unavailable. Optional sources may be recorded when present.
     """
 
     file_name: str = ""
     topic_name: str = ""
     queue_size: int = Field(default=1, ge=1)
+    required: bool = True
 
 
 class TopicRecorderConfig(RecorderConfig):
@@ -106,8 +109,8 @@ class LibraryAppConfig(ConfigModel):
     port: int = 8080
 
 
-class RecordingServiceConfig(ConfigModel):
-    """Recording service with its HTTP dashboard.
+class RecordingUIConfig(ConfigModel):
+    """Browser UI for interactive recording.
 
     Args:
         session: Recording session configuration, including the recorder

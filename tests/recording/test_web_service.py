@@ -17,8 +17,8 @@ from tso_sensorium.episodes.generation_config import (  # noqa: E402
     StateSourceConfig,
 )
 from tso_sensorium.recording.config import (  # noqa: E402
-    RecordingServiceConfig,
     RecordingSessionConfig,
+    RecordingUIConfig,
     TopicRecorderConfig,
     VideoRecorderConfig,
 )
@@ -29,13 +29,19 @@ from tso_sensorium.recording.ros1.web_service import (  # noqa: E402
 )
 
 STATE_TOPIC = "/webtest/state"
+IMAGE_TOPIC = "/webtest/image"
+PUBLISH_TIMEOUT_SECONDS = 5.0
+PUBLISH_INTERVAL_SECONDS = 0.05
 
 
 @pytest.fixture
 def service_factory(ros_node, tmp_path):
     services = []
 
-    def factory(with_generation=False) -> RecordingService:
+    def factory(
+        with_generation=False,
+        recorders=None,
+    ) -> RecordingService:
         generation = None
         if with_generation:
             generation = DatasetGenerationConfig(
@@ -43,17 +49,21 @@ def service_factory(ros_node, tmp_path):
                 writer=CsvWriterConfig(),
                 n_jobs=1,
             )
-        config = RecordingServiceConfig(
+        config = RecordingUIConfig(
             session=RecordingSessionConfig(
                 output_folder=str(tmp_path / "episodes"),
-                recorders=[
-                    TopicRecorderConfig(
-                        file_name="state",
-                        topic_name=STATE_TOPIC,
-                        message_type="std_msgs.msg.String",
-                        fields=["data"],
-                    )
-                ],
+                recorders=(
+                    recorders
+                    if recorders is not None
+                    else [
+                        TopicRecorderConfig(
+                            file_name="state",
+                            topic_name=STATE_TOPIC,
+                            message_type="std_msgs.msg.String",
+                            fields=["data"],
+                        )
+                    ]
+                ),
             ),
             staleness_seconds=1.0,
             generation=generation,
@@ -65,6 +75,21 @@ def service_factory(ros_node, tmp_path):
     yield factory
     for service in services:
         service.close()
+
+
+def _publish_until_alive(
+    service: RecordingService,
+    publisher: rospy.topics.Publisher,
+    message: String | Image,
+    topic_name: str,
+) -> None:
+    deadline = time.monotonic() + PUBLISH_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        publisher.publish(message)
+        if service.liveness.is_alive(topic_name=topic_name):
+            return
+        time.sleep(PUBLISH_INTERVAL_SECONDS)
+    raise TimeoutError(f"Topic did not become live: {topic_name}")
 
 
 @pytest.mark.integration
@@ -82,10 +107,38 @@ def test_dashboard_and_idle_status(service_factory):
 
 
 @pytest.mark.integration
+def test_recording_start_rejects_unpublished_required_topic(
+    service_factory,
+    tmp_path,
+):
+    client = create_app(service=service_factory()).test_client()
+
+    response = client.post(
+        "/api/recording/start",
+        json={"episode_name": "no_data"},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json() == {
+        "error": (
+            "Required recording sources are unavailable: "
+            f"state ({STATE_TOPIC}: no messages received)"
+        )
+    }
+    assert not (tmp_path / "episodes" / "no_data").exists()
+
+
+@pytest.mark.integration
 def test_recording_lifecycle_via_api(service_factory):
     service = service_factory()
     client = create_app(service=service).test_client()
     publisher = rospy.Publisher(STATE_TOPIC, String, queue_size=10)
+    _publish_until_alive(
+        service=service,
+        publisher=publisher,
+        message=String(data="readiness_probe"),
+        topic_name=STATE_TOPIC,
+    )
 
     start = client.post("/api/recording/start", json={"episode_name": "ep1"})
     assert start.status_code == 200
@@ -131,6 +184,12 @@ def test_generation_via_api(service_factory, tmp_path):
     service = service_factory(with_generation=True)
     client = create_app(service=service).test_client()
     publisher = rospy.Publisher(STATE_TOPIC, String, queue_size=10)
+    _publish_until_alive(
+        service=service,
+        publisher=publisher,
+        message=String(data="readiness_probe"),
+        topic_name=STATE_TOPIC,
+    )
 
     client.post("/api/recording/start", json={"episode_name": "gen_ep"})
     time.sleep(1.0)  # Let the subscribers connect before publishing
@@ -172,22 +231,34 @@ def test_generation_without_config_rejected(service_factory):
 def test_video_playback_endpoint_transcodes_to_h264(
     service_factory, ros_node, tmp_path, rng
 ):
-    service = service_factory()
-    client = create_app(service=service).test_client()
-    image_publisher = rospy.Publisher("/webtest/image", Image, queue_size=10)
-
     video_config = VideoRecorderConfig(
-        file_name="camera", topic_name="/webtest/image", frames_per_second=15
+        file_name="camera", topic_name=IMAGE_TOPIC, frames_per_second=15
     )
-    service.config.session.recorders.append(video_config)
+    service = service_factory(recorders=[video_config])
+    client = create_app(service=service).test_client()
+    image_publisher = rospy.Publisher(IMAGE_TOPIC, Image, queue_size=10)
+    message = Image()
+    message.height = 48
+    message.width = 64
+    message.encoding = "bgr8"
+    message.step = 64 * 3
+    message.data = rng.integers(
+        low=0,
+        high=255,
+        size=(48, 64, 3),
+        dtype=np.uint8,
+    ).tobytes()
+    message.header.stamp = rospy.Time.now()
+    _publish_until_alive(
+        service=service,
+        publisher=image_publisher,
+        message=message,
+        topic_name=IMAGE_TOPIC,
+    )
+
     client.post("/api/recording/start", json={"episode_name": "video_ep"})
     time.sleep(1.0)  # Let the subscribers connect before publishing
     for _ in range(5):
-        message = Image()
-        message.height = 48
-        message.width = 64
-        message.encoding = "bgr8"
-        message.step = 64 * 3
         message.data = rng.integers(0, 255, size=(48, 64, 3), dtype=np.uint8).tobytes()
         message.header.stamp = rospy.Time.now()
         image_publisher.publish(message)

@@ -7,6 +7,8 @@ frames, then delegate the actual file writing to these classes.
 from __future__ import annotations
 
 import csv
+import shutil
+import subprocess
 import threading
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -32,6 +34,9 @@ _ENCODING_CONVERSIONS = {
     MONO_ENCODING: cv2.COLOR_GRAY2BGR,
 }
 IMAGE_METADATA_HEADER = ["encoding", "height", "width", "is_bigendian", "step"]
+FFMPEG_EXECUTABLE = "ffmpeg"
+FFMPEG_LOG_LEVEL = "error"
+RETIMED_FILE_INFIX = ".retimed"
 
 
 def image_buffer_to_bgr_frame(
@@ -110,16 +115,19 @@ class TimestampedCsvRecorder:
 
 
 class VideoFileWriter:
-    """Lazily initialized video file writer.
+    """Lazily initialized, timestamp-aware video file writer.
 
     The underlying encoder is created on the first frame, when the frame
     size is known. Lossless compression writes HuffYUV into an ``.avi``
-    container, otherwise mp4v into ``.mp4``.
+    container, otherwise mp4v into ``.mp4``. On close, the video is retimed
+    without re-encoding so its duration follows the acquisition timestamps
+    while retaining exactly one encoded frame per input frame.
 
     Args:
         output_folder: Directory to save the video file.
         file_name: Name of the video file, without extension.
-        frames_per_second: Playback frame rate of the written video.
+        frames_per_second: Initial encoder rate. Acquisition timestamps
+            determine the finalized playback rate.
         lossless_compression: Whether to encode losslessly. Lossless files
             are considerably larger.
     """
@@ -136,10 +144,13 @@ class VideoFileWriter:
         self.frames_per_second = frames_per_second
         self.fourcc = LOSSLESS_FOURCC if lossless_compression else LOSSY_FOURCC
         self._video_writer: Optional[cv2.VideoWriter] = None
+        self._first_timestamp_nanoseconds: Optional[int] = None
+        self._last_timestamp_nanoseconds: Optional[int] = None
+        self._frame_count = 0
         self._closed = False
         self._lock = threading.Lock()
 
-    def write_frame(self, frame: np.ndarray) -> None:
+    def write_frame(self, frame: np.ndarray, timestamp_nanoseconds: int) -> None:
         """Append a BGR frame, creating the encoder on first use.
 
         Frames arriving after ``close`` are dropped: subscription
@@ -149,6 +160,7 @@ class VideoFileWriter:
 
         Args:
             frame: BGR image, (H, W, 3). All frames must share one size.
+            timestamp_nanoseconds: Acquisition time of the frame.
         """
         with self._lock:
             if self._closed:
@@ -162,6 +174,76 @@ class VideoFileWriter:
                     (width, height),
                 )
             self._video_writer.write(frame)
+            if self._first_timestamp_nanoseconds is None:
+                self._first_timestamp_nanoseconds = timestamp_nanoseconds
+            self._last_timestamp_nanoseconds = timestamp_nanoseconds
+            self._frame_count += 1
+
+    def _effective_frames_per_second(self) -> float:
+        if (
+            self._first_timestamp_nanoseconds is None
+            or self._last_timestamp_nanoseconds is None
+            or self._last_timestamp_nanoseconds <= self._first_timestamp_nanoseconds
+        ):
+            raise RuntimeError(
+                "Cannot retime video because frame timestamps do not increase."
+            )
+        elapsed_seconds = (
+            self._last_timestamp_nanoseconds - self._first_timestamp_nanoseconds
+        ) / 1_000_000_000
+        return (self._frame_count - 1) / elapsed_seconds
+
+    def _retime_command(
+        self,
+        ffmpeg_path: str,
+        temporary_file_path: Path,
+        effective_frames_per_second: float,
+    ) -> list[str]:
+        command = [
+            ffmpeg_path,
+            "-y",
+            "-loglevel",
+            FFMPEG_LOG_LEVEL,
+        ]
+        if self.file_path.suffix == f".{LOSSLESS_EXTENSION}":
+            command.extend(["-i", str(self.file_path)])
+        else:
+            timestamp_scale = self.frames_per_second / effective_frames_per_second
+            command.extend(
+                ["-itsscale", str(timestamp_scale), "-i", str(self.file_path)]
+            )
+        command.extend(["-map", "0:v:0", "-c:v", "copy"])
+        if self.file_path.suffix == f".{LOSSLESS_EXTENSION}":
+            command.extend(["-r", str(effective_frames_per_second)])
+        command.extend(["-an", str(temporary_file_path)])
+        return command
+
+    def _retime_video(self) -> None:
+        effective_frames_per_second = self._effective_frames_per_second()
+        ffmpeg_path = shutil.which(FFMPEG_EXECUTABLE)
+        if ffmpeg_path is None:
+            raise RuntimeError(
+                f"Cannot retime video because {FFMPEG_EXECUTABLE} is not available."
+            )
+        temporary_file_path = self.file_path.with_name(
+            f".{self.file_path.stem}{RETIMED_FILE_INFIX}{self.file_path.suffix}"
+        )
+        command = self._retime_command(
+            ffmpeg_path=ffmpeg_path,
+            temporary_file_path=temporary_file_path,
+            effective_frames_per_second=effective_frames_per_second,
+        )
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        if result.returncode != 0:
+            temporary_file_path.unlink(missing_ok=True)
+            error_message = result.stderr.strip()
+            raise RuntimeError(f"Failed to retime video: {error_message}")
+        temporary_file_path.replace(self.file_path)
 
     def close(self) -> None:
         """Finalize the video file if any frame was written."""
@@ -169,3 +251,5 @@ class VideoFileWriter:
             self._closed = True
             if self._video_writer is not None:
                 self._video_writer.release()
+                if self._frame_count > 1:
+                    self._retime_video()

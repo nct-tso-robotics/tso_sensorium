@@ -9,7 +9,7 @@ dot-notation CLI overrides:
         --output_folder /data/recordings --record_rosbag true
 
 For interactive recording with a browser dashboard, see
-``tso_sensorium.scripts.record_service``.
+``tso_sensorium.scripts.record_ui``.
 """
 
 import signal

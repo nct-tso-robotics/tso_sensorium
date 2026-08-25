@@ -143,14 +143,21 @@ class VideoRecorder(RosTopicRecorder):
 
     def callback(self, msg: Any) -> None:
         """Write the frame to the video file and its metadata to the CSV."""
-        super().callback(msg=msg)
+        timestamp_nanoseconds = self._get_message_timestamp(msg=msg)
+        self.csv_recorder.write_row(
+            timestamp_nanoseconds=timestamp_nanoseconds,
+            values=self._get_image_metadata(msg=msg),
+        )
         frame = image_buffer_to_bgr_frame(
             data=msg.data,
             height=msg.height,
             width=msg.width,
             encoding=msg.encoding,
         )
-        self.video_writer.write_frame(frame=frame)
+        self.video_writer.write_frame(
+            frame=frame,
+            timestamp_nanoseconds=timestamp_nanoseconds,
+        )
 
     def close(self) -> None:
         """Close the CSV file and finalize the video."""

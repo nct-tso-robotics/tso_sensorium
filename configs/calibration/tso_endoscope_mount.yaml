@@ -1,0 +1,8 @@
+# Camera +x (image right) follows EE +y, camera +y (image down) follows EE +z,
+# and aligned camera +z (depth) follows EE +x. The optical axis then carries
+# the verified 30-degree endoscope tilt.
+aligned_camera_from_end_effector:
+  - [0.0, 1.0, 0.0]
+  - [0.0, 0.0, 1.0]
+  - [1.0, 0.0, 0.0]
+optical_tilt_radians: -0.5235987755982988

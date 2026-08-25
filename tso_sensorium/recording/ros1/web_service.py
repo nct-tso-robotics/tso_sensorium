@@ -13,7 +13,7 @@ from typing import Optional
 from sensor_msgs.msg import Image
 
 from tso_sensorium.recording.config import (
-    RecordingServiceConfig,
+    RecordingUIConfig,
     TopicRecorderConfig,
 )
 from tso_sensorium.recording.dashboard import RecordingService, create_app
@@ -27,7 +27,7 @@ from tso_sensorium.recording.ros1.session import EpisodeSession
 __all__ = ["RecordingService", "build_recording_service", "create_app"]
 
 
-def build_recording_service(config: RecordingServiceConfig) -> RecordingService:
+def build_recording_service(config: RecordingUIConfig) -> RecordingService:
     """Assemble the recording service from ROS 1 components.
 
     Args:

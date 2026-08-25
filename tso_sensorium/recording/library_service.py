@@ -10,7 +10,7 @@ from __future__ import annotations
 import shutil
 import threading
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import pandas as pd
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -175,14 +175,38 @@ class LibraryService:
             "generation_available": self.generation is not None,
         }
 
+    def delete_episode(self, episode_name: str) -> dict[str, str]:
+        """Delete one recorded episode and all files below it.
 
-def register_library_routes(app: Flask, library: LibraryService) -> None:
+        Args:
+            episode_name: Direct child directory of the recordings root.
+
+        Returns:
+            The deleted episode name.
+        """
+        with self._lock:
+            if self.generation_running():
+                raise RuntimeError("Cannot delete episodes during dataset generation")
+            episode_directory = self.episode_directory(episode_name=episode_name)
+            if not episode_directory.is_dir():
+                raise ValueError(f"Episode not found: {episode_name}")
+            shutil.rmtree(episode_directory)
+        return {"deleted": episode_name}
+
+
+def register_library_routes(
+    app: Flask,
+    library: LibraryService,
+    episode_deleter: Optional[Callable[[str], dict[str, str]]] = None,
+) -> None:
     """Attach the library endpoints to a Flask app.
 
     Args:
         app: Application receiving the routes.
         library: Service backing them.
+        episode_deleter: Optional recording-aware deletion operation.
     """
+    delete_episode = episode_deleter or library.delete_episode
 
     @app.get("/api/episodes")
     def episodes():
@@ -204,6 +228,10 @@ def register_library_routes(app: Flask, library: LibraryService) -> None:
                 for listing in listings
             ]
         )
+
+    @app.delete("/api/episodes/<episode_name>")
+    def remove_episode(episode_name: str):
+        return jsonify(delete_episode(episode_name))
 
     @app.get("/episodes/<episode_name>/<file_name>")
     def episode_file(episode_name: str, file_name: str):
@@ -338,13 +366,14 @@ def register_library_routes(app: Flask, library: LibraryService) -> None:
 def register_error_handlers(app: Flask) -> None:
     """Map validation and state errors to JSON responses."""
 
-    def handle_bad_request(error: ValueError):
+    def handle_bad_request(error: ValueError | OSError):
         return jsonify({"error": str(error)}), 400
 
     def handle_conflict(error: RuntimeError):
         return jsonify({"error": str(error)}), 409
 
     app.register_error_handler(ValueError, handle_bad_request)
+    app.register_error_handler(OSError, handle_bad_request)
     app.register_error_handler(RuntimeError, handle_conflict)
 
 

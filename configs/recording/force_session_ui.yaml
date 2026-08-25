@@ -1,0 +1,6 @@
+session: !include force_session.yaml
+host: 0.0.0.0
+port: 8080
+camera_topic: /laparoscope/camera/left/image_raw
+staleness_seconds: 1.0
+generation: !include ../dataset/bowel_retraction.yaml
