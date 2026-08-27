@@ -104,7 +104,11 @@ def test_shipped_endoscope_guidance_ui_uses_left_camera_preview():
     )
 
     assert config.camera_topic == "/laparoscope/camera/left/image_raw"
-    assert config.generation is None
+    assert config.generation is not None
+    assert config.generation.dataset_schema.name == "endoscope_guidance"
+    assert config.generation.dataset_schema.action_columns[-1] == (
+        "relative_pivot_roll"
+    )
     assert config.session.output_folder == ""
 
 

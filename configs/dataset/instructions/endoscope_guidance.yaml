@@ -1,0 +1,50 @@
+dataset_name: endoscope_guidance
+task: automate the movement of the endoscope
+phase_legend:
+  0:
+    name: focus
+    instructions:
+      - Zoom in toward the region between the surgical instruments.
+      - Center the area between the visible instrument tips.
+      - Move closer to the region where the instruments are interacting.
+      - Reduce the field of view around the active surgical region.
+      - Zoom in while keeping the space between the instruments near the image center.
+  1:
+    name: overview
+    instructions:
+      - Zoom out to obtain a broad view of the operative field.
+      - Move away from the current region to show more surrounding anatomy.
+      - Widen the field of view without focusing on a specific structure.
+      - Show the overall surgical scene and surrounding context.
+  2:
+    name: level_the_horizon
+    instructions:
+      - Rotate the camera until the horizon is level.
+      - Correct the camera roll to make the view upright.
+      - Rotate around the viewing axis until the scene appears straight.
+      - Remove any visible tilt from the camera image.
+      - Adjust roll while keeping the current region in view.
+  3:
+    name: follow_anatomy
+    instructions:
+      - Follow the surgical instrument tip along the anatomical contour.
+      - Move the camera as the instrument progresses along the anatomy.
+      - Keep the instrument tip visible while following the anatomical boundary.
+      - Track the instrument tip continuously along the tissue contour.
+      - Advance the view in the direction of the instrument tip movement.
+  4:
+    name: reach_tip
+    instructions:
+      - Search the scene for the tip of the surgical instrument.
+      - Move the camera toward the visible instrument shaft to find its tip.
+      - Follow the instrument until its distal tip becomes visible.
+      - Scan the operative field for the instrument tip.
+      - Reposition the camera to bring the instrument tip into view.
+  5:
+    name: stop
+    instructions:
+      - Do not move the camera.
+      - Keep the camera completely stationary.
+      - Maintain the current camera position and orientation.
+      - Do not translate or rotate the camera.
+      - Hold the current view without making any adjustment.

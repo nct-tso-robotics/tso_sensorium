@@ -1,0 +1,139 @@
+# Endoscope-guidance demonstrations recorded from the camera-mounted robot.
+# State and action contain the aligned observed camera pose: camera-frame tip
+# position and the controller-reported relative roll angle in radians.
+recordings_root: ""
+save_frames: false
+n_jobs: -1
+sync_column: time
+
+schema:
+  name: endoscope_guidance
+  fps: 10
+  task: automate the movement of the endoscope
+  cameras:
+    - name: left
+      frame_column: frameLeftRectifiedPath
+      height: 540
+      width: 960
+    - name: right
+      frame_column: frameRightRectifiedPath
+      height: 540
+      width: 960
+  arms:
+    - name: camera
+      state_columns:
+        - camera_frame_tip_position_x
+        - camera_frame_tip_position_y
+        - camera_frame_tip_position_z
+        - relative_pivot_roll
+      action_columns:
+        - camera_frame_tip_position_x
+        - camera_frame_tip_position_y
+        - camera_frame_tip_position_z
+        - relative_pivot_roll
+
+videos:
+  - video_file: laparoscope_combined.avi
+    timestamps_file: laparoscope_combined.csv
+    frame_column: frameLeftRectifiedPath
+    frames_directory: framesLeftRectified
+    preprocess:
+      - type: deinterlace
+        side: left
+      - type: resize
+        width: 960
+        height: 540
+      - type: rectify
+        side: left
+        calibration_path: package://storz_endoscope_calibration.yml
+  - video_file: laparoscope_combined.avi
+    timestamps_file: laparoscope_combined.csv
+    frame_column: frameRightRectifiedPath
+    frames_directory: framesRightRectified
+    preprocess:
+      - type: deinterlace
+        side: right
+      - type: resize
+        width: 960
+        height: 540
+      - type: rectify
+        side: right
+        calibration_path: package://storz_endoscope_calibration.yml
+
+states:
+  - state_file: camera_robot_state.csv
+    columns:
+      - relative_tip_position
+      - robot_space_initial_tip_position
+      - relative_pivot_rpy
+
+table_transforms:
+  - type: parse_vector3
+    column: relative_tip_position
+    output_columns:
+      - relative_tip_position_x
+      - relative_tip_position_y
+      - relative_tip_position_z
+  - type: parse_vector3
+    column: robot_space_initial_tip_position
+    output_columns:
+      - robot_space_initial_tip_position_x
+      - robot_space_initial_tip_position_y
+      - robot_space_initial_tip_position_z
+  - type: parse_vector3
+    column: relative_pivot_rpy
+    output_columns:
+      - relative_pivot_roll
+      - relative_pivot_pitch
+      - relative_pivot_yaw
+  - type: sum_columns
+    first_columns:
+      - robot_space_initial_tip_position_x
+      - robot_space_initial_tip_position_y
+      - robot_space_initial_tip_position_z
+    second_columns:
+      - relative_tip_position_x
+      - relative_tip_position_y
+      - relative_tip_position_z
+    output_columns:
+      - base_frame_tip_position_x
+      - base_frame_tip_position_y
+      - base_frame_tip_position_z
+  - type: fixed_transform_to_camera_frame
+    camera_to_base:
+      - [0.75741176, -0.65227261, -0.02945029, -0.40770225]
+      - [-0.51526708, -0.62480848, 0.586612, -0.06276857]
+      - [-0.40103175, -0.42913281, -0.80933251, 0.25916611]
+      - [0.0, 0.0, 0.0, 1.0]
+    position_columns:
+      - base_frame_tip_position_x
+      - base_frame_tip_position_y
+      - base_frame_tip_position_z
+    output_columns:
+      - camera_frame_tip_position_x
+      - camera_frame_tip_position_y
+      - camera_frame_tip_position_z
+    quaternion_output_columns:
+      - base_to_camera_quat_x
+      - base_to_camera_quat_y
+      - base_to_camera_quat_z
+      - base_to_camera_quat_w
+    translation_output_columns:
+      - base_to_camera_trans_x
+      - base_to_camera_trans_y
+      - base_to_camera_trans_z
+  - type: drop_columns
+    columns:
+      - relative_tip_position
+      - relative_pivot_rpy
+      - relative_pivot_pitch
+      - relative_pivot_yaw
+
+annotations:
+  phase_column: task_phase
+  language_column: language
+  legend: !include instructions/endoscope_guidance.yaml
+
+writer:
+  type: csv
+  output_root: null

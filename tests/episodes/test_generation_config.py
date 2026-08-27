@@ -21,6 +21,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 BOWEL_RETRACTION_CONFIG = (
     REPOSITORY_ROOT / "configs" / "dataset" / "bowel_retraction.yaml"
 )
+ENDOSCOPE_GUIDANCE_CONFIG = (
+    REPOSITORY_ROOT / "configs" / "dataset" / "endoscope_guidance.yaml"
+)
 
 
 @pytest.mark.unit
@@ -50,6 +53,35 @@ def test_shipped_bowel_retraction_config_decodes():
         len(definition.instructions) == 10
         for definition in config.annotations.legend.phase_legend.values()
     )
+
+
+@pytest.mark.unit
+def test_shipped_endoscope_guidance_config_includes_roll_in_pose():
+    config = load_config(
+        config_class=DatasetGenerationConfig,
+        config_path=ENDOSCOPE_GUIDANCE_CONFIG,
+    )
+
+    expected_pose_columns = [
+        "camera_frame_tip_position_x",
+        "camera_frame_tip_position_y",
+        "camera_frame_tip_position_z",
+        "relative_pivot_roll",
+    ]
+    assert config.dataset_schema.name == "endoscope_guidance"
+    assert config.dataset_schema.fps == 10
+    assert config.dataset_schema.state_columns == expected_pose_columns
+    assert config.dataset_schema.action_columns == expected_pose_columns
+    assert config.states[0].state_file == "camera_robot_state.csv"
+    assert "relative_pivot_rpy" in config.states[0].columns
+    roll_transform = config.table_transforms[2]
+    assert roll_transform.column == "relative_pivot_rpy"
+    assert roll_transform.output_columns == [
+        "relative_pivot_roll",
+        "relative_pivot_pitch",
+        "relative_pivot_yaw",
+    ]
+    assert sorted(config.annotations.legend.phase_legend) == [0, 1, 2, 3, 4, 5]
 
 
 class TestCsvWriterConfig:
