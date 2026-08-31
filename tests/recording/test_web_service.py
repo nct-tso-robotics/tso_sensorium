@@ -142,7 +142,8 @@ def test_recording_lifecycle_via_api(service_factory):
 
     start = client.post("/api/recording/start", json={"episode_name": "ep1"})
     assert start.status_code == 200
-    assert start.get_json()["episode_name"] == "ep1"
+    episode_name = start.get_json()["episode_name"]
+    assert episode_name.startswith("ep1_")
     assert client.post("/api/recording/start", json={}).status_code == 409
 
     time.sleep(1.0)  # Let the subscribers connect before publishing
@@ -152,16 +153,16 @@ def test_recording_lifecycle_via_api(service_factory):
 
     status = client.get("/api/status").get_json()
     assert status["state"] == "recording"
-    assert status["episode_name"] == "ep1"
+    assert status["episode_name"] == episode_name
     assert status["sensors"][0]["alive"] is True
 
     assert client.post("/api/recording/stop").status_code == 200
     assert client.post("/api/recording/stop").status_code == 409
 
     episodes = client.get("/api/episodes").get_json()
-    assert episodes[0]["name"] == "ep1"
+    assert episodes[0]["name"] == episode_name
     assert any(file["name"] == "state.csv" for file in episodes[0]["files"])
-    served = client.get("/episodes/ep1/state.csv")
+    served = client.get(f"/episodes/{episode_name}/state.csv")
     assert served.status_code == 200
     assert served.data.startswith(b"time,data")
     # Rows must actually contain the published values: an earlier bug
@@ -191,7 +192,10 @@ def test_generation_via_api(service_factory, tmp_path):
         topic_name=STATE_TOPIC,
     )
 
-    client.post("/api/recording/start", json={"episode_name": "gen_ep"})
+    recording_start = client.post(
+        "/api/recording/start", json={"episode_name": "gen_ep"}
+    )
+    episode_name = recording_start.get_json()["episode_name"]
     time.sleep(1.0)  # Let the subscribers connect before publishing
     for index in range(3):
         publisher.publish(String(data=f"value_{index}"))
@@ -212,8 +216,8 @@ def test_generation_via_api(service_factory, tmp_path):
             break
         time.sleep(0.2)
     assert generation["state"] == "done"
-    assert generation["written"] == ["gen_ep"]
-    generated = alternate_root / "gen_ep" / "episode.csv"
+    assert generation["written"] == [episode_name]
+    generated = alternate_root / episode_name / "episode.csv"
     assert generated.is_file()
     # Aligned rows, not just the header.
     assert len(generated.read_text().strip().splitlines()) > 1
@@ -256,7 +260,10 @@ def test_video_playback_endpoint_transcodes_to_h264(
         topic_name=IMAGE_TOPIC,
     )
 
-    client.post("/api/recording/start", json={"episode_name": "video_ep"})
+    recording_start = client.post(
+        "/api/recording/start", json={"episode_name": "video_ep"}
+    )
+    episode_name = recording_start.get_json()["episode_name"]
     time.sleep(1.0)  # Let the subscribers connect before publishing
     for _ in range(5):
         message.data = rng.integers(0, 255, size=(48, 64, 3), dtype=np.uint8).tobytes()
@@ -265,12 +272,12 @@ def test_video_playback_endpoint_transcodes_to_h264(
         time.sleep(0.1)
     client.post("/api/recording/stop")
 
-    recorded = tmp_path / "episodes" / "video_ep" / "camera.mp4"
+    recorded = tmp_path / "episodes" / episode_name / "camera.mp4"
     assert recorded.is_file() and recorded.stat().st_size > 0
-    playback = client.get("/episodes/video_ep/camera.mp4/playback")
+    playback = client.get(f"/episodes/{episode_name}/camera.mp4/playback")
     assert playback.status_code == 200
     assert playback.data[4:8] == b"ftyp"
-    cache = tmp_path / "episodes" / "video_ep" / ".playback" / "camera.mp4"
+    cache = tmp_path / "episodes" / episode_name / ".playback" / "camera.mp4"
     assert cache.is_file()
 
 

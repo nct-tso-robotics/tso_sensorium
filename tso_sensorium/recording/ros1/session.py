@@ -7,7 +7,6 @@ recording path.
 
 from __future__ import annotations
 
-import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -21,17 +20,12 @@ from tso_sensorium.recording.message_fields import (
     MessageFieldExtractor,
     resolve_message_type,
 )
+from tso_sensorium.recording.episode_names import build_episode_name
 from tso_sensorium.recording.ros1.record import (
     Recorder,
     RosTopicRecorder,
     VideoRecorder,
 )
-
-
-def generate_time_based_string() -> str:
-    """Generate an episode name from the current time."""
-    now = datetime.datetime.now()
-    return now.strftime("%Y%m%d_%H%M%S_%f")
 
 
 def build_recorder(
@@ -81,8 +75,7 @@ class EpisodeSession:
 
     Args:
         config: Recording session configuration.
-        episode_name: Name of the episode; defaults to a time-based
-            string.
+        episode_name: Optional descriptive prefix for the time-based episode name.
         recorder_names: Subset of configured recorders to use, by
             ``file_name``; all when ``None``.
     """
@@ -93,9 +86,7 @@ class EpisodeSession:
         episode_name: Optional[str] = None,
         recorder_names: Optional[list[str]] = None,
     ):
-        self.episode_name = (
-            episode_name if episode_name else generate_time_based_string()
-        )
+        self.episode_name = build_episode_name(custom_name=episode_name)
         self.output_folder = Path(config.output_folder).expanduser() / self.episode_name
         selected_configs = self._select_recorders(
             config=config, recorder_names=recorder_names

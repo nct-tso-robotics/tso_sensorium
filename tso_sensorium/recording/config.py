@@ -75,8 +75,8 @@ class RecordingSessionConfig(ConfigModel):
     Args:
         output_folder: Folder storing the recordings; the episode name is
             appended to it.
-        episode_name: Name of the episode. Defaults to a time-based
-            string.
+        episode_name: Optional descriptive prefix. The creation timestamp is
+            always appended to the saved episode name.
         record_rosbag: Whether to also record a rosbag of
             ``rosbag_topics``.
         rosbag_topics: Topics captured in the rosbag.

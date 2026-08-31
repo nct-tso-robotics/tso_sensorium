@@ -95,9 +95,11 @@ def test_recording_lifecycle_over_http(service_factory, ros_node, tmp_path):
 
     started = client.post("/api/recording/start", json={"episode_name": "ep_ros2"})
     assert started.status_code == 200
+    episode_name = started.get_json()["episode_name"]
+    assert episode_name.startswith("ep_ros2_")
     assert client.get("/api/status").get_json()["state"] == "recording"
 
-    csv_path = tmp_path / "episodes" / "ep_ros2" / "state.csv"
+    csv_path = tmp_path / "episodes" / episode_name / "state.csv"
     _publish_until(
         node=ros_node,
         publisher=state_publisher,
@@ -105,11 +107,11 @@ def test_recording_lifecycle_over_http(service_factory, ros_node, tmp_path):
         condition=lambda: csv_path.is_file() and csv_path.stat().st_size > 20,
     )
     stopped = client.post("/api/recording/stop", json={})
-    assert stopped.get_json() == {"episode_name": "ep_ros2"}
+    assert stopped.get_json() == {"episode_name": episode_name}
     assert client.get("/api/status").get_json()["state"] == "idle"
     assert "value_1" in csv_path.read_text()
 
-    served = client.get("/episodes/ep_ros2/state.csv")
+    served = client.get(f"/episodes/{episode_name}/state.csv")
     assert served.status_code == 200
     assert b"value_1" in served.data
 
@@ -161,7 +163,8 @@ def test_output_folder_switching(service_factory, ros_node, tmp_path):
     )
     started = client.post("/api/recording/start", json={"episode_name": "ep_locked"})
     assert started.status_code == 200
+    episode_name = started.get_json()["episode_name"]
     locked = client.post("/api/recording/output_folder", json={"path": str(other)})
     assert locked.status_code == 409
     client.post("/api/recording/stop", json={})
-    assert (other / "ep_locked").is_dir()
+    assert (other / episode_name).is_dir()

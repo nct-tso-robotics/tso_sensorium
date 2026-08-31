@@ -144,7 +144,7 @@ class RecordingService:
         """Start recording one episode.
 
         Args:
-            episode_name: Episode name; defaults to a time-based string.
+            episode_name: Optional descriptive prefix for the time-based episode name.
             recorder_names: Subset of recorders to use; all when ``None``.
 
         Returns:
