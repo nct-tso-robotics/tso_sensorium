@@ -1,6 +1,8 @@
 # Endoscope-guidance demonstrations recorded from the camera-mounted robot.
-# State and action contain the aligned observed camera pose: camera-frame tip
-# position and the controller-reported relative roll angle in radians.
+# The recorded quaternion maps camera-frame vectors into the robot base. State
+# uses its inverse to express the relative tip displacement in the current
+# camera frame. Actions are differenced in the fixed robot base first and then
+# rotated into the camera frame at the start of each transition.
 recordings_root: ""
 save_frames: false
 n_jobs: -1
@@ -8,7 +10,7 @@ sync_column: time
 
 schema:
   name: endoscope_guidance
-  fps: 10
+  fps: 5
   task: automate the movement of the endoscope
   cameras:
     - name: left
@@ -27,10 +29,30 @@ schema:
         - camera_frame_tip_position_z
         - relative_pivot_roll
       action_columns:
+        - camera_frame_tip_delta_x
+        - camera_frame_tip_delta_y
+        - camera_frame_tip_delta_z
+        - relative_pivot_roll_delta
+  coordinate_frame_features:
+    camera_frame_tip_position:
+      columns:
         - camera_frame_tip_position_x
         - camera_frame_tip_position_y
         - camera_frame_tip_position_z
-        - relative_pivot_roll
+      frame: camera
+      frame_temporality: moving
+    camera_frame_tip_delta:
+      columns:
+        - camera_frame_tip_delta_x
+        - camera_frame_tip_delta_y
+        - camera_frame_tip_delta_z
+      frame: camera
+      frame_temporality: moving
+  auxiliary_features:
+    task_phase:
+      columns:
+        - task_phase
+      dtype: int64
 
 videos:
   - video_file: laparoscope_combined.avi
@@ -61,11 +83,16 @@ videos:
         calibration_path: package://storz_endoscope_calibration.yml
 
 states:
-  - state_file: camera_robot_state.csv
+  - state_file: robot_state.csv
     columns:
       - relative_tip_position
-      - robot_space_initial_tip_position
       - relative_pivot_rpy
+  - state_file: robot_camera_transform.csv
+    columns:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
 
 table_transforms:
   - type: parse_vector3
@@ -75,53 +102,57 @@ table_transforms:
       - relative_tip_position_y
       - relative_tip_position_z
   - type: parse_vector3
-    column: robot_space_initial_tip_position
-    output_columns:
-      - robot_space_initial_tip_position_x
-      - robot_space_initial_tip_position_y
-      - robot_space_initial_tip_position_z
-  - type: parse_vector3
     column: relative_pivot_rpy
     output_columns:
       - relative_pivot_roll
       - relative_pivot_pitch
       - relative_pivot_yaw
-  - type: sum_columns
-    first_columns:
-      - robot_space_initial_tip_position_x
-      - robot_space_initial_tip_position_y
-      - robot_space_initial_tip_position_z
-    second_columns:
+  - type: forward_difference
+    columns:
       - relative_tip_position_x
       - relative_tip_position_y
       - relative_tip_position_z
     output_columns:
-      - base_frame_tip_position_x
-      - base_frame_tip_position_y
-      - base_frame_tip_position_z
-  - type: fixed_transform_to_camera_frame
-    camera_to_base:
-      - [0.75741176, -0.65227261, -0.02945029, -0.40770225]
-      - [-0.51526708, -0.62480848, 0.586612, -0.06276857]
-      - [-0.40103175, -0.42913281, -0.80933251, 0.25916611]
-      - [0.0, 0.0, 0.0, 1.0]
-    position_columns:
-      - base_frame_tip_position_x
-      - base_frame_tip_position_y
-      - base_frame_tip_position_z
+      - robot_frame_tip_delta_x
+      - robot_frame_tip_delta_y
+      - robot_frame_tip_delta_z
+  - type: wrapped_angle_difference
+    columns:
+      - relative_pivot_roll
+    output_columns:
+      - relative_pivot_roll_delta
+  - type: drop_terminal_rows
+    count: 1
+  - type: rotate_by_quaternion_columns
+    point_columns:
+      - relative_tip_position_x
+      - relative_tip_position_y
+      - relative_tip_position_z
+    quaternion_columns:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
     output_columns:
       - camera_frame_tip_position_x
       - camera_frame_tip_position_y
       - camera_frame_tip_position_z
-    quaternion_output_columns:
-      - base_to_camera_quat_x
-      - base_to_camera_quat_y
-      - base_to_camera_quat_z
-      - base_to_camera_quat_w
-    translation_output_columns:
-      - base_to_camera_trans_x
-      - base_to_camera_trans_y
-      - base_to_camera_trans_z
+    inverse: true
+  - type: rotate_by_quaternion_columns
+    point_columns:
+      - robot_frame_tip_delta_x
+      - robot_frame_tip_delta_y
+      - robot_frame_tip_delta_z
+    quaternion_columns:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
+    output_columns:
+      - camera_frame_tip_delta_x
+      - camera_frame_tip_delta_y
+      - camera_frame_tip_delta_z
+    inverse: true
   - type: drop_columns
     columns:
       - relative_tip_position
@@ -132,7 +163,23 @@ table_transforms:
 annotations:
   phase_column: task_phase
   language_column: language
+  language_source: phase_legend
+  legend_source: config
   legend: !include instructions/endoscope_guidance.yaml
+
+dataset_transforms:
+  - type: percentile_denoise_columns
+    column_groups:
+      translation:
+        columns:
+          - camera_frame_tip_delta_x
+          - camera_frame_tip_delta_y
+          - camera_frame_tip_delta_z
+        percentile: 30.0
+      roll:
+        columns:
+          - relative_pivot_roll_delta
+        percentile: 20.0
 
 writer:
   type: csv

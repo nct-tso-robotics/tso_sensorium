@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -133,6 +134,39 @@ class VideoData(StateData):
         self.frame_col_name = frame_col_name
         self.save_frames = save_frames
         self.preprocess_fn = preprocess_fn
+        self._frame_count: Optional[int] = None
+        self._sync_column: Optional[pd.Series] = None
+
+    def _get_frame_count(self) -> int:
+        """Return the number of decodable frames reported by the video."""
+        if self._frame_count is not None:
+            return self._frame_count
+        capture = cv2.VideoCapture(str(self.video_path))
+        if not capture.isOpened():
+            raise ValueError(f"Could not open video file {self.video_path}")
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        capture.release()
+        if frame_count <= 0:
+            raise ValueError(f"Video file has no frames: {self.video_path}")
+        self._frame_count = frame_count
+        return frame_count
+
+    def get_sync_col_data(self) -> pd.Series:
+        """Read timestamps bounded to frames that exist in the video."""
+        if self._sync_column is not None:
+            return self._sync_column
+        timestamps = super().get_sync_col_data()
+        frame_count = self._get_frame_count()
+        if len(timestamps) != frame_count:
+            logging.warning(
+                "Video/timestamp length mismatch for %s: %d frames, %d timestamps; "
+                "using the shared prefix",
+                self.video_path,
+                frame_count,
+                len(timestamps),
+            )
+        self._sync_column = timestamps.iloc[:frame_count].reset_index(drop=True)
+        return self._sync_column
 
     def _get_frame_name(self, frame_number: int) -> str:
         return f"{int(frame_number)}{FRAME_FILE_EXTENSION}"

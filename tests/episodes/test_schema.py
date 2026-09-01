@@ -5,7 +5,12 @@ import re
 import pandas as pd
 import pytest
 
-from tso_sensorium.episodes.schema import ArmFeature
+from tso_sensorium.episodes.schema import (
+    ArmFeature,
+    AuxiliaryFeature,
+    CoordinateFrameFeatureMetadata,
+    FrameTemporality,
+)
 
 
 class TestColumnAggregation:
@@ -69,3 +74,43 @@ class TestEpisodeTableValidation:
             match=re.escape(f"Episode table is missing schema columns: {missing}"),
         ):
             schema.validate_episode_table(table=table)
+
+    @pytest.mark.unit
+    def test_requires_auxiliary_columns(self, schema_factory):
+        schema = schema_factory(
+            auxiliary_features={
+                "task_phase": AuxiliaryFeature(columns=["task_phase"], dtype="int64")
+            }
+        )
+        table = pd.DataFrame(
+            {
+                "x": [0.0],
+                "y": [0.0],
+                "dx": [0.0],
+                "dy": [0.0],
+                "left_frame": ["frames/0.png"],
+            }
+        )
+        missing = ["task_phase"]
+
+        with pytest.raises(
+            ValueError,
+            match=re.escape(f"Episode table is missing schema columns: {missing}"),
+        ):
+            schema.validate_episode_table(table=table)
+
+
+@pytest.mark.unit
+def test_coordinate_frame_feature_must_reference_exported_columns(schema_factory):
+    feature = CoordinateFrameFeatureMetadata(
+        columns=["camera_x", "camera_y", "camera_z"],
+        frame="camera",
+        frame_temporality=FrameTemporality.MOVING,
+    )
+    expected_message = (
+        "Coordinate-frame feature 'tip' references columns outside the schema: "
+        "['camera_x', 'camera_y', 'camera_z']"
+    )
+
+    with pytest.raises(ValueError, match=re.escape(expected_message)):
+        schema_factory(coordinate_frame_features={"tip": feature})

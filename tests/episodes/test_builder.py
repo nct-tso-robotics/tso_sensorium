@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
+import cv2
 import pandas as pd
 import pytest
 
@@ -129,7 +130,7 @@ class TestGenerateDataset:
             EpisodeGenerator().generate_dataset()
 
     @pytest.mark.integration
-    def test_aligns_staggered_video_and_state_recordings(self, tmp_path):
+    def test_aligns_staggered_video_and_state_recordings(self, tmp_path, rng):
         camera_timestamps = [
             0,
             100_000_000,
@@ -141,14 +142,26 @@ class TestGenerateDataset:
         ]
         robot_timestamps = list(range(400_000_000, 602_000_000, 2_000_000))
         camera_path = tmp_path / "camera.csv"
+        camera_video_path = tmp_path / "camera.avi"
         robot_path = tmp_path / "robot.csv"
         pd.DataFrame({"time": camera_timestamps}).to_csv(camera_path, index=False)
         pd.DataFrame({"time": robot_timestamps, "position": robot_timestamps}).to_csv(
             robot_path, index=False
         )
+        video_writer = cv2.VideoWriter(
+            str(camera_video_path),
+            cv2.VideoWriter_fourcc(*"MJPG"),
+            10.0,
+            (8, 8),
+        )
+        for _ in camera_timestamps:
+            video_writer.write(
+                rng.integers(low=0, high=255, size=(8, 8, 3), dtype="uint8")
+            )
+        video_writer.release()
         generator = EpisodeGenerator()
         generator.add_video(
-            video_path=tmp_path / "camera.avi",
+            video_path=camera_video_path,
             timestamps_path=camera_path,
             sync_col_name="time",
             frames_output_path=tmp_path / "frames",

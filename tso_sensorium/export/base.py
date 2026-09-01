@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Protocol
 
 from tso_sensorium.episodes.schema import DatasetSchema, Episode
+
+
+class DatasetWriterOperation(str, Enum):
+    """Operation exposed by a writer for dataset-build progress."""
+
+    WRITE = "writing"
+    UPDATE = "updating"
 
 
 class DatasetWriter(Protocol):
@@ -15,6 +23,8 @@ class DatasetWriter(Protocol):
     formats implement this protocol; format-specific dependencies stay in
     the writer's own module.
     """
+
+    operation: DatasetWriterOperation
 
     def open(self, schema: DatasetSchema) -> None:
         """Prepare the output dataset for the given schema."""
@@ -30,4 +40,8 @@ class DatasetWriter(Protocol):
 
     def finalize(self) -> None:
         """Complete the dataset after the last episode."""
+        ...
+
+    def abort(self) -> None:
+        """Release resources and discard writer-owned incomplete output."""
         ...

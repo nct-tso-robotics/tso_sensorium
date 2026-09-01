@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import cv2
 import numpy as np
 import pandas as pd
 import pytest
@@ -112,10 +113,29 @@ class TestStateData:
 
 class TestVideoData:
     @pytest.mark.unit
+    def test_frame_count_is_read_once_and_cached(self, video_data_factory):
+        video_data = video_data_factory()
+        capture = MagicMock()
+        capture.isOpened.return_value = True
+        capture.get.return_value = 3
+        with patch(VIDEO_CAPTURE_PATH, return_value=capture) as video_capture:
+            first_count = video_data._get_frame_count()
+            second_count = video_data._get_frame_count()
+
+        assert first_count == 3
+        assert second_count == 3
+        video_capture.assert_called_once_with("episode.mp4")
+        capture.get.assert_called_once_with(cv2.CAP_PROP_FRAME_COUNT)
+        capture.release.assert_called_once_with()
+
+    @pytest.mark.unit
     def test_get_data_returns_aligned_frame_paths(self, video_data_factory):
         video_data = video_data_factory(frames_output_path="frames")
         timestamps = pd.DataFrame({"timestamp": [0, 10, 20]})
-        with patch(READ_CSV_PATH, return_value=timestamps):
+        with (
+            patch(READ_CSV_PATH, return_value=timestamps),
+            patch.object(video_data, "_get_frame_count", return_value=3),
+        ):
             aligned = video_data.get_data(source_sync_dataframe=pd.Series([1, 19]))
         assert list(aligned.columns) == ["frame_path"]
         assert aligned["frame_path"].tolist() == [
@@ -129,10 +149,23 @@ class TestVideoData:
         timestamps = pd.DataFrame({"timestamp": [0]})
         with (
             patch.object(video_data, "_save_frames") as save_frames,
+            patch.object(video_data, "_get_frame_count", return_value=1),
             patch(READ_CSV_PATH, return_value=timestamps),
         ):
             video_data.get_data(source_sync_dataframe=pd.Series([0]))
         save_frames.assert_called_once_with()
+
+    @pytest.mark.unit
+    def test_timestamp_rows_are_bounded_to_decodable_frames(self, video_data_factory):
+        video_data = video_data_factory()
+        timestamps = pd.DataFrame({"timestamp": [0, 10, 20]})
+        with (
+            patch(READ_CSV_PATH, return_value=timestamps),
+            patch.object(video_data, "_get_frame_count", return_value=2),
+        ):
+            sync_column = video_data.get_sync_col_data()
+
+        assert sync_column.tolist() == [0, 10]
 
     @pytest.mark.unit
     def test_save_frames_writes_preprocessed_frames(

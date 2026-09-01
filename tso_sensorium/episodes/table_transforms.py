@@ -8,11 +8,12 @@ of the episodes package stays importable without it.
 from __future__ import annotations
 
 import abc
+import math
 from typing import Annotated, Dict, List, Literal, Union
 
 import numpy as np
 import pandas as pd
-from pydantic import Field
+from pydantic import Field, model_validator
 from scipy.spatial.transform import Rotation
 
 from tso_sensorium.configuration import ConfigModel
@@ -152,23 +153,152 @@ class RotateByQuaternionColumns(TableTransform):
         point_columns: Position columns, x, y, z order.
         quaternion_columns: Quaternion columns, x, y, z, w order.
         output_columns: Rotated position column names.
+        inverse: Whether to apply the inverse quaternion rotation.
     """
 
     type: Literal["rotate_by_quaternion_columns"] = "rotate_by_quaternion_columns"
     point_columns: List[str] = Field(default_factory=list)
     quaternion_columns: List[str] = Field(default_factory=list)
     output_columns: List[str] = Field(default_factory=list)
+    inverse: bool = False
+
+    @model_validator(mode="after")
+    def validate_column_counts(self) -> "RotateByQuaternionColumns":
+        """Validate vector, quaternion, and output dimensions."""
+        if len(self.point_columns) != 3:
+            raise ValueError(
+                f"point_columns must contain 3 columns, got {self.point_columns}"
+            )
+        if len(self.quaternion_columns) != 4:
+            raise ValueError(
+                "quaternion_columns must contain 4 columns, got "
+                f"{self.quaternion_columns}"
+            )
+        if len(self.output_columns) != 3:
+            raise ValueError(
+                f"output_columns must contain 3 columns, got {self.output_columns}"
+            )
+        return self
 
     def apply(self, table: pd.DataFrame) -> pd.DataFrame:
-        rotated = [
-            rotate_point_with_quaternion(
-                quaternion=list(row[self.quaternion_columns]),
-                point=list(row[self.point_columns]),
-            )
-            for _, row in table.iterrows()
-        ]
-        table[self.output_columns] = np.array(rotated).reshape(len(table), 3)
+        quaternions = np.array(
+            table[self.quaternion_columns].to_numpy(dtype=float),
+            dtype=float,
+            order="C",
+            copy=True,
+        )
+        points = np.array(
+            table[self.point_columns].to_numpy(dtype=float),
+            dtype=float,
+            order="C",
+            copy=True,
+        )
+        rotations = Rotation.from_quat(quat=quaternions)
+        table[self.output_columns] = rotations.apply(
+            vectors=points,
+            inverse=self.inverse,
+        )
         return table
+
+
+class ForwardDifferenceColumns(TableTransform):
+    """Compute the next-row minus current-row difference for column groups.
+
+    The final row receives missing values because it has no successor. A
+    later ``drop_terminal_rows`` transform can remove it once every action
+    component has been derived.
+
+    Args:
+        columns: Source columns to difference.
+        output_columns: Difference column names, in the same order.
+    """
+
+    type: Literal["forward_difference"] = "forward_difference"
+    columns: List[str] = Field(default_factory=list)
+    output_columns: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_column_counts(self) -> "ForwardDifferenceColumns":
+        """Validate that source and output columns pair one-to-one."""
+        if not self.columns:
+            raise ValueError("columns cannot be empty")
+        if len(self.columns) != len(self.output_columns):
+            raise ValueError(
+                "columns and output_columns must have the same length, got "
+                f"{len(self.columns)} and {len(self.output_columns)}"
+            )
+        return self
+
+    def apply(self, table: pd.DataFrame) -> pd.DataFrame:
+        values = table[self.columns].to_numpy(dtype=float)
+        differences = np.full(values.shape, np.nan, dtype=float)
+        differences[:-1] = values[1:] - values[:-1]
+        table[self.output_columns] = differences
+        return table
+
+
+class WrappedAngleDifferenceColumns(TableTransform):
+    """Compute wrapped next-row minus current-row angular differences.
+
+    Args:
+        columns: Source angle columns.
+        output_columns: Wrapped difference column names.
+        period: Full period of the angular representation.
+    """
+
+    type: Literal["wrapped_angle_difference"] = "wrapped_angle_difference"
+    columns: List[str] = Field(default_factory=list)
+    output_columns: List[str] = Field(default_factory=list)
+    period: float = math.tau
+
+    @model_validator(mode="after")
+    def validate_configuration(self) -> "WrappedAngleDifferenceColumns":
+        """Validate column pairing and the angular period."""
+        if not self.columns:
+            raise ValueError("columns cannot be empty")
+        if len(self.columns) != len(self.output_columns):
+            raise ValueError(
+                "columns and output_columns must have the same length, got "
+                f"{len(self.columns)} and {len(self.output_columns)}"
+            )
+        if self.period <= 0:
+            raise ValueError(f"period must be positive, got {self.period}")
+        return self
+
+    def apply(self, table: pd.DataFrame) -> pd.DataFrame:
+        values = table[self.columns].to_numpy(dtype=float)
+        differences = np.full(values.shape, np.nan, dtype=float)
+        raw_differences = values[1:] - values[:-1]
+        half_period = self.period / 2.0
+        differences[:-1] = (raw_differences + half_period) % self.period - half_period
+        table[self.output_columns] = differences
+        return table
+
+
+class DropTerminalRows(TableTransform):
+    """Remove rows at the end of an episode table.
+
+    Args:
+        count: Number of terminal rows to remove.
+    """
+
+    type: Literal["drop_terminal_rows"] = "drop_terminal_rows"
+    count: int = 1
+
+    @model_validator(mode="after")
+    def validate_count(self) -> "DropTerminalRows":
+        """Validate that at least one row will be removed."""
+        if self.count <= 0:
+            raise ValueError(f"count must be positive, got {self.count}")
+        return self
+
+    def apply(self, table: pd.DataFrame) -> pd.DataFrame:
+        if len(table) <= self.count:
+            raise ValueError(
+                f"Cannot drop {self.count} terminal rows from a table with "
+                f"{len(table)} rows"
+            )
+        return table.iloc[: -self.count].reset_index(drop=True)
 
 
 class AddConstantColumns(TableTransform):
@@ -221,6 +351,9 @@ AnyTableTransform = Annotated[
         SumColumns,
         FixedTransformToCameraFrame,
         RotateByQuaternionColumns,
+        ForwardDifferenceColumns,
+        WrappedAngleDifferenceColumns,
+        DropTerminalRows,
         AddConstantColumns,
         RenameColumns,
         DropColumns,

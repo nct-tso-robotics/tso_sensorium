@@ -6,11 +6,12 @@ from unittest.mock import patch
 
 import cv2
 import numpy as np
+import pandas as pd
 import pytest
 
 pytest.importorskip("lerobot")
 
-from tso_sensorium.episodes.schema import Episode  # noqa: E402
+from tso_sensorium.episodes.schema import AuxiliaryFeature, Episode  # noqa: E402
 from tso_sensorium.export.lerobot_writer import (  # noqa: E402
     LeRobotDatasetWriter,
 )
@@ -49,8 +50,14 @@ class TestOpen:
         expected_camera_dtype,
     ):
         writer = writer_factory(use_videos=use_videos)
+        schema = schema_factory(
+            fps=30,
+            auxiliary_features={
+                "task_phase": AuxiliaryFeature(columns=["task_phase"], dtype="int64")
+            },
+        )
         with patch(LEROBOT_DATASET_PATH) as dataset_class:
-            writer.open(schema=schema_factory(fps=30))
+            writer.open(schema=schema)
         dataset_class.create.assert_called_once_with(
             repo_id="tso/test_dataset",
             fps=30,
@@ -64,6 +71,11 @@ class TestOpen:
                     "dtype": "float32",
                     "shape": (2,),
                     "names": ["dx", "dy"],
+                },
+                "task_phase": {
+                    "dtype": "int64",
+                    "shape": (1,),
+                    "names": ["task_phase"],
                 },
                 "observation.images.left": {
                     "dtype": expected_camera_dtype,
@@ -107,8 +119,14 @@ class TestAddEpisode:
         bgr_image = np.zeros((8, 8, 3), dtype=np.uint8)
         bgr_image[:, :, 0] = 255
         table = episode_table_factory(length=2)
+        table["task_phase"] = [2, 3]
+        schema = schema_factory(
+            auxiliary_features={
+                "task_phase": AuxiliaryFeature(columns=["task_phase"], dtype="int64")
+            }
+        )
         with patch(LEROBOT_DATASET_PATH) as dataset_class:
-            writer.open(schema=schema_factory())
+            writer.open(schema=schema)
             dataset = dataset_class.create.return_value
             with patch(IMREAD_PATH, return_value=bgr_image):
                 writer.add_episode(episode=Episode(name="episode_000", table=table))
@@ -121,6 +139,9 @@ class TestAddEpisode:
         )
         np.testing.assert_array_equal(
             first_frame["action"], np.array([0.0, 0.0], dtype=np.float32)
+        )
+        np.testing.assert_array_equal(
+            first_frame["task_phase"], np.array([2], dtype=np.int64)
         )
         np.testing.assert_array_equal(
             first_frame["observation.images.left"],
@@ -201,6 +222,38 @@ class TestFinalize:
         writer.finalize()
 
 
+class TestAbort:
+    @pytest.mark.unit
+    def test_removes_new_writer_owned_output(
+        self, writer_factory, schema_factory, tmp_path
+    ):
+        writer = writer_factory()
+        with patch(LEROBOT_DATASET_PATH):
+            writer.open(schema=schema_factory())
+            output_root = tmp_path / "dataset"
+            output_root.mkdir()
+            (output_root / "partial").write_text("incomplete")
+
+            writer.abort()
+
+        assert not output_root.exists()
+
+    @pytest.mark.unit
+    def test_never_removes_preexisting_output(
+        self, writer_factory, schema_factory, tmp_path
+    ):
+        output_root = tmp_path / "dataset"
+        output_root.mkdir()
+        sentinel = output_root / "sentinel"
+        sentinel.write_text("preserve")
+        writer = writer_factory()
+        with patch(LEROBOT_DATASET_PATH):
+            writer.open(schema=schema_factory())
+            writer.abort()
+
+        assert sentinel.read_text() == "preserve"
+
+
 @pytest.mark.integration
 def test_round_trip_writes_v30_dataset(
     tmp_path, schema_factory, episode_table_factory, rng
@@ -221,11 +274,19 @@ def test_round_trip_writes_v30_dataset(
         output_root=tmp_path / "dataset",
         use_videos=False,
     )
-    writer.open(schema=schema_factory(fps=10))
+    schema = schema_factory(
+        fps=10,
+        auxiliary_features={
+            "task_phase": AuxiliaryFeature(columns=["task_phase"], dtype="int64")
+        },
+    )
+    writer.open(schema=schema)
+    table = episode_table_factory(length=3, frame_paths=frame_paths)
+    table["task_phase"] = [0, 1, 1]
     writer.add_episode(
         episode=Episode(
             name="episode_000",
-            table=episode_table_factory(length=3, frame_paths=frame_paths),
+            table=table,
         )
     )
     writer.finalize()
@@ -235,5 +296,11 @@ def test_round_trip_writes_v30_dataset(
     assert info["total_frames"] == 3
     assert info["total_episodes"] == 1
     assert "observation.images.left" in info["features"]
+    assert info["features"]["task_phase"] == {
+        "dtype": "int64",
+        "shape": [1],
+        "names": ["task_phase"],
+    }
     data_files = list((tmp_path / "dataset" / "data").rglob("*.parquet"))
-    assert len(data_files) > 0
+    assert len(data_files) == 1
+    assert pd.read_parquet(data_files[0])["task_phase"].tolist() == [0, 1, 1]

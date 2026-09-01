@@ -119,6 +119,20 @@
   #dir-list .entry { padding: 8px 18px; cursor: pointer; font-size: 13px; font-family: var(--font); display: flex; gap: 8px; }
   #dir-list .entry:hover { background: #ffffff10; }
   #dir-picker .actions { display: flex; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); }
+  #generation-modal { position: fixed; inset: 0; background: #040807aa; backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 60; }
+  #generation-modal .modal-card { width: min(620px, 92vw); background: var(--panel-raised); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 30px 60px #040807cc; }
+  #generation-modal h2 { margin: 0; padding: 15px 18px; font-size: 16px; font-family: var(--display); border-bottom: 1px solid var(--border); }
+  #generation-modal .body { padding: 18px; }
+  #generation-phase { font-family: var(--display); font-size: 14px; color: var(--gold); }
+  #generation-detail { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-top: 5px; }
+  .generation-progress-track { height: 12px; margin: 14px 0 9px; overflow: hidden; background: #0c1414cc; border: 1px solid var(--border); border-radius: 999px; }
+  #generation-progress-bar { width: 0; height: 100%; background: linear-gradient(90deg, var(--accent), var(--gold)); transition: width 0.2s ease; }
+  #generation-progress-bar.indeterminate { width: 100%; opacity: 0.35; background: repeating-linear-gradient(135deg, var(--accent) 0 8px, transparent 8px 16px); }
+  #generation-modal-failures { max-height: 150px; overflow-y: auto; margin-top: 12px; color: var(--muted); font-family: var(--font); font-size: 12px; }
+  #generation-modal-failures .reason { padding: 3px 0; }
+  #generation-modal-failures b { color: #ff8589; font-family: var(--mono); }
+  #generation-modal .actions { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-top: 1px solid var(--border); }
+  #generation-modal .actions .hint { flex: 1; }
 
   .sensors { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
   .sensor {
@@ -160,15 +174,35 @@
   #generate:hover { border-color: var(--gold); color: var(--gold); }
   #generate:disabled { opacity: 0.45; cursor: default; }
   #generation-status.running { color: var(--amber); }
+  #generation-status.cancelling { color: var(--amber); }
   #generation-status.done { color: var(--green); }
+  #generation-status.cancelled { color: var(--muted); }
   #generation-status.failed { color: var(--red); }
   .gen-option { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; font-family: var(--font); }
   .gen-option select, .gen-option input[type=number] { background: #0c1414cc; border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 4px 6px; font-size: 12px; width: auto; font-family: var(--font); }
   .gen-option input[type=number] { width: 64px; }
-  #gen-output-root { background: #0c1414cc; border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 4px 8px; font-size: 12px; font-family: var(--mono); flex: 1; min-width: 140px; }
+  #gen-output-option, #gen-action-root-option { flex: 1; min-width: 280px; }
+  #gen-output-root, #gen-action-root { background: #0c1414cc; border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 4px 8px; font-size: 12px; font-family: var(--mono); flex: 1; min-width: 140px; }
+  #gen-action-update-warning { flex-basis: 100%; padding: 9px 11px; border: 1px solid #d6a94d66; border-radius: 8px; background: #d6a94d12; color: #e8c87f; font-size: 11.5px; line-height: 1.45; }
   #generation-failures { padding: 8px 18px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); font-family: var(--font); }
   #generation-failures .reason { padding: 2px 0; }
   #generation-failures .reason b { color: #ff8589; font-family: var(--mono); font-weight: 600; }
+  .denoise-actions { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; }
+  .denoise-group { background: var(--panel-raised); border: 1px solid var(--border); border-radius: 11px; padding: 14px; }
+  .denoise-group + .denoise-group { margin-top: 12px; }
+  .denoise-group h3 { margin: 0; font-family: var(--display); font-size: 14px; color: var(--gold); }
+  .denoise-columns { color: var(--muted); font-family: var(--mono); font-size: 10.5px; margin: 4px 0 10px; word-break: break-all; }
+  .denoise-plot { width: 100%; height: 180px; display: block; background: #0c1414cc; border: 1px solid var(--border); border-radius: 8px; }
+  .denoise-slider { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin: 11px 0 5px; color: var(--muted); font-size: 12px; }
+  .denoise-slider input { accent-color: var(--gold); width: 100%; }
+  .denoise-slider output { min-width: 48px; color: var(--gold); font-family: var(--mono); text-align: right; }
+  .denoise-threshold { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .denoise-threshold code { color: var(--text); font-family: var(--mono); }
+  .denoise-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .denoise-table th, .denoise-table td { padding: 5px 7px; border-top: 1px solid var(--border); text-align: right; }
+  .denoise-table th { color: var(--muted); font-weight: 500; }
+  .denoise-table th:first-child, .denoise-table td:first-child { text-align: left; }
+  .denoise-table .overall { color: var(--text); font-weight: 600; }
 
   /* Legend editor */
   .legend-head { display: flex; gap: 12px; padding: 0 0 12px; }
@@ -232,6 +266,22 @@
     <div class="actions">
       <button class="ann-button primary" id="dir-select">Use this folder</button>
       <button class="ann-button" id="dir-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+<div id="generation-modal" class="view-hidden" role="dialog" aria-modal="true" aria-labelledby="generation-modal-title">
+  <div class="modal-card">
+    <h2 id="generation-modal-title">Dataset generation</h2>
+    <div class="body">
+      <div id="generation-phase">Preparing…</div>
+      <div id="generation-detail">Waiting for progress.</div>
+      <div class="generation-progress-track"><div id="generation-progress-bar"></div></div>
+      <div id="generation-modal-failures" hidden></div>
+    </div>
+    <div class="actions">
+      <span class="hint" id="generation-cancel-hint"></span>
+      <button class="ann-button danger" id="generation-abort">Stop generation</button>
+      <button class="ann-button" id="generation-close" hidden>Close</button>
     </div>
   </div>
 </div>
@@ -318,19 +368,39 @@
       <h2>Replay</h2>
       <video id="player" controls></video>
     </div>
+    <div class="card" id="denoise-card" hidden>
+      <h2>Action denoising preview</h2>
+      <div class="body">
+        <div class="card-desc">Assemble actions from the current recordings folder without writing a dataset. Each plot compares raw and retained nonzero actions using the same log10-magnitude histogram bins. Exact zeros are omitted from the plot but included in the counts below. Selected percentiles are passed to the next generation run.</div>
+        <div class="denoise-actions">
+          <button class="ann-button" id="denoise-refresh">Load / refresh preview</button>
+          <span class="hint" id="denoise-status">Preview not loaded.</span>
+        </div>
+        <div id="denoise-groups"></div>
+      </div>
+    </div>
     <div class="card">
       <h2>Library</h2>
       <div class="library-actions">
         <button id="generate" hidden>&#9881; Generate dataset</button>
-        <label class="gen-option"><input type="checkbox" id="gen-frames"> extract frames</label>
-        <label class="gen-option">format
+        <label class="gen-option">mode
+          <select id="gen-mode"><option value="full">full dataset</option><option value="actions_only">actions only — existing LeRobot</option></select>
+        </label>
+        <label class="gen-option" id="gen-frames-option"><input type="checkbox" id="gen-frames"> re-extract camera frames into recordings</label>
+        <label class="gen-option" id="gen-format-option">format
           <select id="gen-format"><option value="csv">csv</option><option value="lerobot">lerobot</option></select>
         </label>
         <label class="gen-option">sync tol (s)
           <input type="number" id="gen-tolerance" step="0.05" min="0" placeholder="0.1">
         </label>
-        <input type="text" id="gen-output-root" placeholder="output root (lerobot)" hidden>
+        <label class="gen-option" id="gen-output-option" hidden><span id="gen-output-label">output root</span>
+          <input type="text" id="gen-output-root" placeholder="LeRobot dataset root">
+        </label>
+        <label class="gen-option" id="gen-action-root-option" hidden>existing LeRobot root
+          <input type="text" id="gen-action-root" placeholder="Existing LeRobot v3 dataset root">
+        </label>
         <span class="hint" id="generation-status"></span>
+        <div id="gen-action-update-warning" hidden><b>Actions-only update.</b> Updates actions and statistics; videos and observations stay unchanged. Aborting leaves the existing dataset untouched.</div>
       </div>
       <div id="generation-failures" hidden></div>
       <div id="episodes"><div class="empty">No episodes yet.</div></div>
@@ -338,7 +408,37 @@
   </div>
 </main>
 <script>
-const state = { recording: false, sensors: [], deselected: new Set(), rootSeeded: false, legend: { dataset_name: "", task: "", phase_legend: {} } };
+const state = {
+  recording: false,
+  sensors: [],
+  deselected: new Set(),
+  rootSeeded: false,
+  legend: { dataset_name: "", task: "", phase_legend: {} },
+  denoisingGroups: [],
+  denoisingPercentiles: {},
+  denoisingPreviewLoading: false,
+  generationActive: false,
+  generationSubmissionPending: false,
+  pendingGeneration: null,
+  generationSnapshot: null,
+  lastGenerationState: "idle",
+  displayedGenerationRunId: null,
+  dismissedGenerationRunId: null,
+};
+
+const GENERATION_MODE_FULL = "full";
+const GENERATION_MODE_ACTIONS_ONLY = "actions_only";
+const GENERATION_ACTIVE_STATES = new Set(["running", "cancelling"]);
+const GENERATION_PHASE_LABELS = {
+  discovering: "Discovering episodes",
+  assembling: "Assembling episodes",
+  transforming: "Applying dataset transforms",
+  writing: "Writing dataset episodes",
+  updating: "Staging LeRobot action updates",
+  finalizing: "Finalizing dataset",
+  completed: "Generation complete",
+  cancelled: "Generation cancelled",
+};
 
 function phaseName(label) {
   const entry = state.legend.phase_legend[String(label)];
@@ -386,6 +486,185 @@ function renderSensors() {
   }
 }
 
+function updateGenerationModeControls() {
+  const mode = document.getElementById("gen-mode").value;
+  const actionsOnly = mode === GENERATION_MODE_ACTIONS_ONLY;
+  const format = document.getElementById("gen-format").value;
+  const framesOption = document.getElementById("gen-frames-option");
+  const framesCheckbox = document.getElementById("gen-frames");
+  const formatOption = document.getElementById("gen-format-option");
+  const formatSelect = document.getElementById("gen-format");
+  const outputOption = document.getElementById("gen-output-option");
+  const actionRootOption = document.getElementById("gen-action-root-option");
+  const warning = document.getElementById("gen-action-update-warning");
+
+  framesOption.hidden = actionsOnly;
+  framesCheckbox.disabled = actionsOnly || state.generationActive;
+  formatOption.hidden = actionsOnly;
+  formatSelect.disabled = actionsOnly || state.generationActive;
+  outputOption.hidden = actionsOnly || format !== "lerobot";
+  actionRootOption.hidden = !actionsOnly;
+  warning.hidden = !actionsOnly;
+  document.getElementById("gen-mode").disabled = state.generationActive;
+  document.getElementById("gen-tolerance").disabled = state.generationActive;
+  document.getElementById("gen-output-root").disabled = state.generationActive;
+  document.getElementById("gen-action-root").disabled = state.generationActive;
+  document.getElementById("generate").textContent = actionsOnly
+    ? "\u2699 Update LeRobot actions"
+    : "\u2699 Generate dataset";
+}
+
+function renderFailureEntries(container, failed) {
+  const entries = Object.entries(failed || {});
+  container.hidden = entries.length === 0;
+  container.replaceChildren();
+  for (const [name, reason] of entries) {
+    const row = document.createElement("div");
+    row.className = "reason";
+    const episode = document.createElement("b");
+    episode.textContent = name;
+    row.append(episode, ` \u2014 ${reason}`);
+    container.appendChild(row);
+  }
+}
+
+function generationPercentage(generation) {
+  if (Number.isFinite(generation.percentage)) return generation.percentage;
+  if (!generation.total) return 0;
+  return Math.min(100, generation.completed / generation.total * 100);
+}
+
+function generationWorkUnit(phase) {
+  if (phase === "transforming") return "transforms";
+  if (phase === "finalizing") return "steps";
+  return "episodes";
+}
+
+function renderGenerationModal(generation) {
+  state.displayedGenerationRunId = generation.run_id;
+  const modal = document.getElementById("generation-modal");
+  const active = GENERATION_ACTIVE_STATES.has(generation.state);
+  const terminal = ["done", "failed", "cancelled"].includes(generation.state);
+  if (active) state.dismissedGenerationRunId = null;
+  if (
+    !active &&
+    (!terminal || state.dismissedGenerationRunId === generation.run_id)
+  ) {
+    modal.classList.add("view-hidden");
+    return;
+  }
+
+  modal.classList.remove("view-hidden");
+  const actionsOnly = generation.mode === GENERATION_MODE_ACTIONS_ONLY;
+  document.getElementById("generation-modal-title").textContent = actionsOnly
+    ? "LeRobot actions-only update"
+    : "Dataset generation";
+
+  let phaseLabel = GENERATION_PHASE_LABELS[generation.phase] || "Preparing dataset";
+  if (generation.state === "failed") phaseLabel = "Generation failed";
+  if (generation.state === "cancelled") phaseLabel = "Generation cancelled";
+  if (generation.state === "done") phaseLabel = "Generation complete";
+  document.getElementById("generation-phase").textContent = phaseLabel;
+
+  const completed = Number(generation.completed || 0);
+  const total = Number(generation.total || 0);
+  const percentage = generationPercentage(generation);
+  const detail = document.getElementById("generation-detail");
+  if (generation.state === "failed") {
+    detail.textContent = generation.error || "Dataset generation failed.";
+  } else if (generation.state === "done") {
+    detail.textContent = `${(generation.written || []).length} episodes written.`;
+  } else if (generation.state === "cancelled") {
+    if (actionsOnly) {
+      detail.textContent =
+        "The staged update was discarded; the existing dataset is unchanged.";
+    } else if (generation.writer_type === "lerobot") {
+      detail.textContent =
+        "Writer-owned fresh partial output was removed when applicable.";
+    } else {
+      detail.textContent =
+        "Generation stopped; CSV files already written remain in place.";
+    }
+  } else if (total > 0) {
+    const current = generation.current_episode
+      ? ` \u00b7 ${generation.current_episode}`
+      : "";
+    detail.textContent =
+      `${completed}/${total} ${generationWorkUnit(generation.phase)}` +
+      ` \u00b7 ${percentage.toFixed(1)}%${current}`;
+  } else {
+    detail.textContent = "Waiting for the first completed work unit\u2026";
+  }
+
+  const progressBar = document.getElementById("generation-progress-bar");
+  const indeterminate = active && total === 0;
+  progressBar.classList.toggle("indeterminate", indeterminate);
+  progressBar.style.width = indeterminate
+    ? "100%"
+    : `${generation.state === "done" ? 100 : percentage}%`;
+  renderFailureEntries(
+    document.getElementById("generation-modal-failures"),
+    generation.failed,
+  );
+
+  const abortButton = document.getElementById("generation-abort");
+  const closeButton = document.getElementById("generation-close");
+  const finalizing = ["finalizing", "completed"].includes(generation.phase);
+  if (actionsOnly) {
+    abortButton.textContent = "Abort and discard staged update";
+  } else if (generation.writer_type === "lerobot") {
+    abortButton.textContent = "Abort and delete fresh partial output";
+  } else {
+    abortButton.textContent = "Stop after current episode";
+  }
+  abortButton.hidden = !active || finalizing;
+  abortButton.disabled = generation.state === "cancelling" || finalizing;
+  closeButton.hidden = active;
+  const cancellationHint = document.getElementById("generation-cancel-hint");
+  if (generation.state === "cancelling") {
+    cancellationHint.textContent = "Cancelling after current episode\u2026";
+  } else if (active && finalizing) {
+    cancellationHint.textContent =
+      "Commit/finalization is in progress; cancellation is no longer available.";
+  } else if (active && actionsOnly) {
+    cancellationHint.textContent =
+      "Abort discards staging; the existing dataset stays unchanged.";
+  } else if (active && generation.writer_type === "lerobot") {
+    cancellationHint.textContent =
+      "Only a fresh output root created by this run can be removed; pre-existing datasets are never deleted.";
+  } else if (active) {
+    cancellationHint.textContent =
+      "CSV files already written stay in place; recordings are never deleted.";
+  } else {
+    cancellationHint.textContent = "";
+  }
+}
+
+function showGenerationSubmission(mode, writerType) {
+  state.dismissedGenerationRunId = null;
+  state.generationSubmissionPending = true;
+  state.generationActive = true;
+  updateGenerationModeControls();
+  document.getElementById("generate").disabled = true;
+  state.pendingGeneration = {
+    state: "running",
+    run_id: "submitting",
+    mode,
+    writer_type: writerType,
+    phase: null,
+    completed: 0,
+    total: 0,
+    percentage: 0,
+    failed: {},
+  };
+  state.generationSnapshot = state.pendingGeneration;
+  renderGenerationModal(state.pendingGeneration);
+  document.getElementById("generation-phase").textContent =
+    mode === GENERATION_MODE_ACTIONS_ONLY
+      ? "Submitting actions-only update\u2026"
+      : "Submitting dataset generation\u2026";
+}
+
 async function refreshStatus() {
   const status = await requestJson("/api/status");
   state.recording = status.state === "recording";
@@ -419,29 +698,66 @@ async function refreshStatus() {
   const generateButton = document.getElementById("generate");
   const generationStatus = document.getElementById("generation-status");
   generateButton.hidden = !status.generation_available;
-  const generation = status.generation || { state: "idle" };
-  const generationRunning = generation.state === "running";
-  generateButton.disabled = state.recording || generationRunning;
+  document.getElementById("denoise-card").hidden =
+    !status.denoising_preview_available;
+  const polledGeneration = status.generation || { state: "idle", run_id: null };
+  let generation = polledGeneration;
+  if (state.generationSubmissionPending) {
+    generation = state.pendingGeneration;
+  } else if (
+    state.generationSnapshot &&
+    Number.isFinite(state.generationSnapshot.run_id) &&
+    (!Number.isFinite(polledGeneration.run_id) ||
+      polledGeneration.run_id < state.generationSnapshot.run_id)
+  ) {
+    generation = state.generationSnapshot;
+  } else {
+    state.generationSnapshot = polledGeneration;
+  }
+  const generationRunning = GENERATION_ACTIVE_STATES.has(generation.state);
+  state.generationActive = generationRunning;
+  generateButton.disabled =
+    state.recording || generationRunning || state.denoisingPreviewLoading;
   document.getElementById("record").disabled = generationRunning;
+  document.getElementById("denoise-refresh").disabled =
+    generationRunning || state.denoisingPreviewLoading;
+  updateGenerationModeControls();
   generationStatus.className = "hint " + generation.state;
   if (generation.state === "running") {
-    generationStatus.textContent = "Generating dataset…";
+    const phase = GENERATION_PHASE_LABELS[generation.phase] || "Generating dataset";
+    const progress = generation.total
+      ? ` ${generation.completed}/${generation.total} (${generationPercentage(generation).toFixed(1)}%)`
+      : "";
+    generationStatus.textContent = `${phase}…${progress}`;
+  } else if (generation.state === "cancelling") {
+    generationStatus.textContent = "Cancelling after current episode…";
   } else if (generation.state === "done") {
     const failed = Object.keys(generation.failed || {}).length;
     generationStatus.textContent =
       `Generated ${generation.written.length} episodes` + (failed ? `, ${failed} discarded` : "");
+  } else if (generation.state === "cancelled") {
+    if (generation.mode === GENERATION_MODE_ACTIONS_ONLY) {
+      generationStatus.textContent =
+        "Action update cancelled; existing dataset unchanged.";
+    } else if (generation.writer_type === "lerobot") {
+      generationStatus.textContent =
+        "Generation cancelled; fresh partial output removed when applicable.";
+    } else {
+      generationStatus.textContent =
+        "Generation stopped; written CSV files remain.";
+    }
   } else if (generation.state === "failed") {
     generationStatus.textContent = "Generation failed: " + generation.error;
   } else {
     generationStatus.textContent = "";
   }
   const failures = document.getElementById("generation-failures");
-  const failedEntries = Object.entries(generation.failed || {});
-  failures.hidden = failedEntries.length === 0;
-  failures.innerHTML = failedEntries
-    .map(([name, reason]) => `<div class="reason"><b>${name}</b> — ${reason}</div>`)
-    .join("");
-  if (state.lastGenerationState === "running" && generation.state !== "running") refreshEpisodes();
+  renderFailureEntries(failures, generation.failed);
+  renderGenerationModal(generation);
+  if (
+    GENERATION_ACTIVE_STATES.has(state.lastGenerationState) &&
+    !GENERATION_ACTIVE_STATES.has(generation.state)
+  ) refreshEpisodes();
   state.lastGenerationState = generation.state;
   renderSensors();
 }
@@ -551,6 +867,7 @@ async function switchOutputFolder(path) {
     await refreshStatus();
     await refreshEpisodes();
     await loadLegend();
+    clearDenoisingPreview();
   } catch (error) {
     alert(error.message);
   }
@@ -568,22 +885,328 @@ document.getElementById("record").addEventListener("click", async () => {
   if (await post("/api/recording/start", body)) refreshStatus();
 });
 
-document.getElementById("gen-format").addEventListener("change", (event) => {
-  document.getElementById("gen-output-root").hidden = event.target.value !== "lerobot";
+document.getElementById("gen-mode").addEventListener("change", () => {
+  updateGenerationModeControls();
+});
+document.getElementById("gen-format").addEventListener("change", () => {
+  updateGenerationModeControls();
+});
+
+function formatMagnitude(value) {
+  if (value === 0) return "0";
+  return Math.abs(value) < 0.001 ? value.toExponential(3) : value.toPrecision(5);
+}
+
+function drawDenoisingHistogram(canvas, group) {
+  const pixelRatio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || 640;
+  const height = canvas.clientHeight || 180;
+  canvas.width = Math.floor(width * pixelRatio);
+  canvas.height = Math.floor(height * pixelRatio);
+  const context = canvas.getContext("2d");
+  context.scale(pixelRatio, pixelRatio);
+  const margin = { left: 52, right: 14, top: 34, bottom: 32 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const histogram = group.histogram;
+  const minimumLogMagnitude = histogram.bin_edges[0];
+  const maximumLogMagnitude = histogram.bin_edges[histogram.bin_edges.length - 1];
+  const maxCount = Math.max(1, ...histogram.raw_counts, ...histogram.denoised_counts);
+  const binWidth = plotWidth / histogram.raw_counts.length;
+  const barHeight = count => count / maxCount * plotHeight;
+  const x = logMagnitude => margin.left +
+    (logMagnitude - minimumLogMagnitude) /
+    (maximumLogMagnitude - minimumLogMagnitude) * plotWidth;
+
+  context.strokeStyle = "#486158";
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(margin.left, margin.top);
+  context.lineTo(margin.left, margin.top + plotHeight);
+  context.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+  context.stroke();
+
+  histogram.raw_counts.forEach((count, index) => {
+    const heightPixels = barHeight(count);
+    context.fillStyle = "rgba(70, 130, 180, 0.65)";
+    context.fillRect(
+      margin.left + index * binWidth,
+      margin.top + plotHeight - heightPixels,
+      Math.max(1, binWidth),
+      heightPixels,
+    );
+  });
+  histogram.denoised_counts.forEach((count, index) => {
+    const heightPixels = barHeight(count);
+    const retainedWidth = Math.max(1, binWidth * 0.55);
+    context.fillStyle = "rgba(255, 127, 80, 0.8)";
+    context.fillRect(
+      margin.left + index * binWidth + (binWidth - retainedWidth) / 2,
+      margin.top + plotHeight - heightPixels,
+      retainedWidth,
+      heightPixels,
+    );
+  });
+
+  const thresholdX = x(histogram.log10_threshold);
+  context.strokeStyle = "#e34f65";
+  context.lineWidth = 2;
+  context.setLineDash([5, 4]);
+  context.beginPath();
+  context.moveTo(thresholdX, margin.top);
+  context.lineTo(thresholdX, margin.top + plotHeight);
+  context.stroke();
+  context.setLineDash([]);
+
+  context.fillStyle = "#92a89e";
+  context.font = "10px sans-serif";
+  context.fillText(String(maxCount), 5, margin.top + 4);
+  context.fillText(minimumLogMagnitude.toFixed(2), margin.left - 10, height - 17);
+  context.fillText(maximumLogMagnitude.toFixed(2), margin.left + plotWidth - 24, height - 17);
+  context.fillText("log10(action magnitude)", margin.left + plotWidth / 2 - 52, height - 5);
+
+  context.fillStyle = "rgba(70, 130, 180, 0.8)";
+  context.fillRect(margin.left, 10, 10, 8);
+  context.fillStyle = "#b8cbc2";
+  context.fillText("Raw nonzero", margin.left + 15, 18);
+  context.fillStyle = "rgba(255, 127, 80, 0.9)";
+  context.fillRect(margin.left + 94, 10, 10, 8);
+  context.fillStyle = "#b8cbc2";
+  context.fillText("Denoised nonzero", margin.left + 109, 18);
+  context.strokeStyle = "#e34f65";
+  context.setLineDash([4, 3]);
+  context.beginPath();
+  context.moveTo(margin.left + 226, 14);
+  context.lineTo(margin.left + 242, 14);
+  context.stroke();
+  context.setLineDash([]);
+  context.fillStyle = "#b8cbc2";
+  context.fillText("Threshold", margin.left + 247, 18);
+}
+
+function appendDenoisingSummaryRow(tableBody, label, summary, className) {
+  const row = document.createElement("tr");
+  row.className = className || "";
+  const values = [
+    label,
+    summary.sample_count,
+    summary.existing_zero_count,
+    summary.newly_zeroed_count,
+    `${summary.zeroed_count} (${summary.zeroed_percent.toFixed(1)}%)`,
+  ];
+  for (const value of values) {
+    const cell = document.createElement("td");
+    cell.textContent = value;
+    row.appendChild(cell);
+  }
+  tableBody.appendChild(row);
+}
+
+function renderDenoisingPreview(payload) {
+  state.denoisingGroups = payload.groups;
+  const container = document.getElementById("denoise-groups");
+  container.innerHTML = "";
+  const failedCount = Object.keys(payload.failed || {}).length;
+  document.getElementById("denoise-status").textContent =
+    `${payload.episode_count} episodes assembled` +
+    (failedCount ? `, ${failedCount} discarded` : "");
+  for (const group of payload.groups) {
+    state.denoisingPercentiles[group.override_path] = group.percentile;
+    const panel = document.createElement("div");
+    panel.className = "denoise-group";
+    const heading = document.createElement("h3");
+    heading.textContent = group.name;
+    panel.appendChild(heading);
+    const columns = document.createElement("div");
+    columns.className = "denoise-columns";
+    columns.textContent = group.columns.join(" · ");
+    panel.appendChild(columns);
+    const canvas = document.createElement("canvas");
+    canvas.className = "denoise-plot";
+    panel.appendChild(canvas);
+
+    const sliderRow = document.createElement("label");
+    sliderRow.className = "denoise-slider";
+    const sliderLabel = document.createElement("span");
+    sliderLabel.textContent = "Denoising percentile";
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "100";
+    slider.step = "0.5";
+    slider.value = group.percentile;
+    const output = document.createElement("output");
+    output.textContent = `${Number(group.percentile).toFixed(1)}%`;
+    slider.addEventListener("input", () => {
+      output.textContent = `${Number(slider.value).toFixed(1)}%`;
+    });
+    slider.addEventListener("change", () => {
+      state.denoisingPercentiles[group.override_path] = Number(slider.value);
+      loadDenoisingPreview(false);
+    });
+    sliderRow.append(sliderLabel, slider, output);
+    panel.appendChild(sliderRow);
+
+    const threshold = document.createElement("div");
+    threshold.className = "denoise-threshold";
+    threshold.append("Threshold: ");
+    const thresholdValue = document.createElement("code");
+    thresholdValue.textContent = formatMagnitude(group.threshold);
+    threshold.appendChild(thresholdValue);
+    panel.appendChild(threshold);
+
+    const table = document.createElement("table");
+    table.className = "denoise-table";
+    table.innerHTML = "<thead><tr><th>Scope</th><th>Samples</th><th>Already zero</th><th>Newly zeroed</th><th>Zero after</th></tr></thead>";
+    const tableBody = document.createElement("tbody");
+    appendDenoisingSummaryRow(tableBody, "Overall", group.overall, "overall");
+    for (const phase of group.phases) {
+      const phaseLabel = phase.name ? `${phase.label}: ${phase.name}` : `Phase ${phase.label}`;
+      appendDenoisingSummaryRow(tableBody, phaseLabel, phase, "");
+    }
+    table.appendChild(tableBody);
+    panel.appendChild(table);
+    container.appendChild(panel);
+    drawDenoisingHistogram(canvas, group);
+  }
+}
+
+function clearDenoisingPreview() {
+  state.denoisingGroups = [];
+  document.getElementById("denoise-groups").innerHTML = "";
+  document.getElementById("denoise-status").textContent = "Preview not loaded.";
+}
+
+async function loadDenoisingPreview(refresh) {
+  const button = document.getElementById("denoise-refresh");
+  const status = document.getElementById("denoise-status");
+  state.denoisingPreviewLoading = true;
+  button.disabled = true;
+  document.getElementById("generate").disabled = true;
+  status.textContent = refresh ? "Assembling recorded episodes…" : "Updating threshold…";
+  try {
+    const payload = await requestJson("/api/generation/denoising-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        percentiles: state.denoisingPercentiles,
+        refresh,
+      }),
+    });
+    renderDenoisingPreview(payload);
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    state.denoisingPreviewLoading = false;
+    button.disabled = state.generationActive;
+    document.getElementById("generate").disabled =
+      state.recording || state.generationActive;
+  }
+}
+
+document.getElementById("denoise-refresh").addEventListener("click", () => {
+  loadDenoisingPreview(true);
 });
 
 document.getElementById("generate").addEventListener("click", async () => {
-  const overrides = { save_frames: document.getElementById("gen-frames").checked };
+  const mode = document.getElementById("gen-mode").value;
+  const actionsOnly = mode === GENERATION_MODE_ACTIONS_ONLY;
+  const overrides = {
+    save_frames: actionsOnly
+      ? false
+      : document.getElementById("gen-frames").checked,
+  };
+  for (const [path, percentile] of Object.entries(state.denoisingPercentiles)) {
+    overrides[path] = percentile;
+  }
   const tolerance = document.getElementById("gen-tolerance").value;
   if (tolerance) overrides["max_sync_difference_seconds"] = Number(tolerance);
-  const format = document.getElementById("gen-format").value;
-  const outputRoot = document.getElementById("gen-output-root").value || null;
-  if (format === "lerobot") {
-    overrides["writer"] = { type: "lerobot", output_root: outputRoot || "", repo_id: null, use_videos: true };
-  } else if (outputRoot) {
-    overrides["writer"] = { type: "csv", output_root: outputRoot };
+
+  const payload = { mode, overrides };
+  let writerType = "lerobot_action_update";
+  if (actionsOnly) {
+    const datasetRoot = document.getElementById("gen-action-root").value.trim();
+    if (!datasetRoot) {
+      alert("Choose an existing LeRobot v3 dataset root for the actions-only update.");
+      return;
+    }
+    payload.dataset_root = datasetRoot;
+  } else {
+    const format = document.getElementById("gen-format").value;
+    writerType = format;
+    if (format === "lerobot") {
+      const outputRoot = document.getElementById("gen-output-root").value.trim();
+      if (!outputRoot) {
+        alert("Choose an output root for the new LeRobot dataset.");
+        return;
+      }
+      overrides.writer = {
+        type: "lerobot",
+        output_root: outputRoot,
+        repo_id: null,
+        use_videos: true,
+      };
+    } else {
+      overrides.writer = { type: "csv", output_root: null };
+    }
   }
-  if (await post("/api/generation/start", { overrides })) refreshStatus();
+
+  showGenerationSubmission(mode, writerType);
+  document.getElementById("generation-abort").disabled = true;
+  document.getElementById("generation-cancel-hint").textContent =
+    "Waiting for the server to accept the run\u2026";
+  try {
+    const generation = await requestJson("/api/generation/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    state.generationSubmissionPending = false;
+    state.pendingGeneration = null;
+    state.generationSnapshot = generation;
+    renderGenerationModal(generation);
+    await refreshStatus();
+  } catch (error) {
+    state.generationSubmissionPending = false;
+    state.pendingGeneration = null;
+    state.generationActive = false;
+    updateGenerationModeControls();
+    renderGenerationModal({
+      state: "failed",
+      run_id: "submission-error",
+      mode,
+      writer_type: writerType,
+      error: error.message,
+      failed: {},
+      completed: 0,
+      total: 0,
+      percentage: 0,
+    });
+    alert(error.message);
+  }
+});
+
+document.getElementById("generation-abort").addEventListener("click", async () => {
+  const abortButton = document.getElementById("generation-abort");
+  abortButton.disabled = true;
+  document.getElementById("generation-cancel-hint").textContent =
+    "Cancelling after current episode\u2026";
+  try {
+    const generation = await requestJson("/api/generation/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    renderGenerationModal(generation);
+  } catch (error) {
+    abortButton.disabled = false;
+    document.getElementById("generation-cancel-hint").textContent = error.message;
+  }
+});
+
+document.getElementById("generation-close").addEventListener("click", () => {
+  state.dismissedGenerationRunId = state.displayedGenerationRunId;
+  document.getElementById("generation-modal").classList.add("view-hidden");
 });
 
 const feed = document.getElementById("feed");
@@ -797,6 +1420,7 @@ document.getElementById("root-scan").addEventListener("click", async () => {
   }
   hint.textContent = `Scanning ${payload.output_folder}`;
   hint.style.color = "";
+  clearDenoisingPreview();
   refreshEpisodes();
   loadLegend();
 });
@@ -921,6 +1545,7 @@ document.getElementById("legend-save").addEventListener("click", async () => {
   }
 });
 
+updateGenerationModeControls();
 refreshStatus();
 refreshEpisodes();
 loadLegend();

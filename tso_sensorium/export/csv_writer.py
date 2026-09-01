@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from tso_sensorium.episodes.schema import DatasetSchema, Episode
+from tso_sensorium.export.base import DatasetWriterOperation
 
 EPISODE_FILE_NAME = "episode.csv"
 METADATA_FILE_NAME = "dataset_metadata.json"
@@ -21,6 +22,8 @@ class CsvDatasetWriter:
     Args:
         output_root: Directory receiving one subdirectory per episode.
     """
+
+    operation = DatasetWriterOperation.WRITE
 
     def __init__(self, output_root: Path | str):
         self.output_root = Path(output_root)
@@ -51,3 +54,6 @@ class CsvDatasetWriter:
 
     def finalize(self) -> None:
         """Nothing to finalize; episodes are self-contained CSV files."""
+
+    def abort(self) -> None:
+        """Leave CSV recordings untouched after an interrupted generation."""

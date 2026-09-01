@@ -22,6 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (threshold and sequential-trigger).
 - Pydantic-validated YAML configuration with `!include` composition and
   dot-notation CLI overrides.
+- Coordinate-frame feature metadata describing exact component columns, frame
+  names, and fixed, moving, or unknown frame temporality.
+- Named auxiliary LeRobot features for labels that do not belong in robot
+  state or action vectors.
+- Dataset-level percentile denoising over configured action-column groups.
+- Dashboard controls that clearly separate full dataset export from transactional
+  action-only updates of an existing LeRobot v3 dataset.
+- Real dataset-generation progress in the dashboard, including build phase,
+  completed and total work units, percentage, current episode, and failures.
+- Cooperative dashboard cancellation with operation-specific cleanup: staged
+  action updates are discarded atomically, only fresh writer-owned LeRobot
+  output may be removed, and existing datasets and recordings are preserved.
+- Transactional LeRobot action-only updates that rewrite actions, their
+  per-episode and global statistics, and generation provenance through an
+  atomic staged swap while preserving videos and non-action data.
 
 ### Changed
 
@@ -30,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Derive endoscope-guidance translation actions in the robot base before
+  rotating them into the recorded camera frame at the start of each
+  transition. Camera-frame state now uses the same recorded transform as
+  deployment, and terminal rows without a successor are omitted.
+- Use one phase-legend instruction per endoscope-guidance phase, independent
+  of legacy per-segment language variants.
+- Bound video timestamps to decodable frames so a trailing timestamp without
+  a corresponding encoded frame cannot create an invalid frame path.
 - Crop independently started sensor streams to their shared timestamp range
   before nearest-neighbor alignment. Startup and shutdown frames without a
   corresponding state sample no longer discard an otherwise valid episode;

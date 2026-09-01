@@ -1,10 +1,8 @@
-"""Dataset-level metadata: name, task, and the phase legend.
+"""Dataset-level metadata: identity, phase legend, and coordinate frames.
 
-The legend maps integer phase labels to a named phase and its language
-instruction variants. It lives in ``dataset_metadata.json`` at the
-recordings root, is edited from the dashboard or seeded from generation
-configs, and is written into every generated dataset so annotations can
-always be reconstructed.
+The metadata lives in ``dataset_metadata.json`` at the recordings root,
+is edited from the dashboard or seeded from generation configs, and is
+written into every generated dataset.
 """
 
 from __future__ import annotations
@@ -16,6 +14,7 @@ from typing import Dict, List, Union
 from pydantic import Field
 
 from tso_sensorium.configuration import ConfigModel
+from tso_sensorium.episodes.schema import CoordinateFrameFeatureMetadata
 
 DATASET_METADATA_FILE_NAME = "dataset_metadata.json"
 
@@ -40,11 +39,16 @@ class DatasetMetadata(ConfigModel):
         dataset_name: Name of the dataset.
         task: Overall task description.
         phase_legend: Mapping of integer phase label to its definition.
+        coordinate_frame_features: Vector component groups and their coordinate-frame
+            temporality.
     """
 
     dataset_name: str = ""
     task: str = ""
     phase_legend: Dict[int, PhaseDefinition] = Field(default_factory=dict)
+    coordinate_frame_features: Dict[str, CoordinateFrameFeatureMetadata] = Field(
+        default_factory=dict
+    )
 
     @classmethod
     def load(cls, path: Union[Path, str]) -> "DatasetMetadata":
@@ -71,6 +75,12 @@ class DatasetMetadata(ConfigModel):
                 )
                 for label, entry in payload.get("phase_legend", {}).items()
             },
+            coordinate_frame_features={
+                name: CoordinateFrameFeatureMetadata.model_validate(feature)
+                for name, feature in payload.get(
+                    "coordinate_frame_features", {}
+                ).items()
+            },
         )
 
     def save(self, path: Union[Path, str]) -> None:
@@ -79,18 +89,7 @@ class DatasetMetadata(ConfigModel):
         Args:
             path: Metadata file, typically at the recordings root.
         """
-        payload = {
-            "dataset_name": self.dataset_name,
-            "task": self.task,
-            "phase_legend": {
-                str(label): {
-                    "name": definition.name,
-                    "instructions": definition.instructions,
-                }
-                for label, definition in sorted(self.phase_legend.items())
-            },
-        }
-        Path(path).write_text(json.dumps(payload, indent=2))
+        Path(path).write_text(json.dumps(self.to_payload(), indent=2))
 
     def to_payload(self) -> dict:
         """Serialize for the HTTP API and dataset metadata files."""
@@ -103,5 +102,9 @@ class DatasetMetadata(ConfigModel):
                     "instructions": definition.instructions,
                 }
                 for label, definition in sorted(self.phase_legend.items())
+            },
+            "coordinate_frame_features": {
+                name: feature.model_dump(mode="json")
+                for name, feature in sorted(self.coordinate_frame_features.items())
             },
         }
