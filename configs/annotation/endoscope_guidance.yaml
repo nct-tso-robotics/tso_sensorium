@@ -1,0 +1,5 @@
+# Standalone annotation and generation UI for endoscope-guidance recordings.
+recordings_root: ""
+host: 0.0.0.0
+port: 8080
+generation: !include ../dataset/endoscope_guidance.yaml

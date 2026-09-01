@@ -6,6 +6,7 @@ import pytest
 
 from tso_sensorium.configuration import load_config, parse_config_from_cli
 from tso_sensorium.recording.config import (
+    LibraryAppConfig,
     RecordingSessionConfig,
     RecordingUIConfig,
     TopicRecorderConfig,
@@ -22,6 +23,9 @@ ENDOSCOPE_GUIDANCE_CONFIG = (
 )
 ENDOSCOPE_GUIDANCE_UI_CONFIG = (
     REPOSITORY_ROOT / "configs" / "recording" / "endoscope_guidance_ui.yaml"
+)
+ENDOSCOPE_GUIDANCE_ANNOTATION_CONFIG = (
+    REPOSITORY_ROOT / "configs" / "annotation" / "endoscope_guidance.yaml"
 )
 FORCE_SESSION_CONFIG = REPOSITORY_ROOT / "configs" / "recording" / "force_session.yaml"
 FORCE_SESSION_UI_CONFIG = (
@@ -86,6 +90,7 @@ def test_shipped_endoscope_guidance_config_contains_only_guidance_streams():
         "/laparoscope/camera/right/image_raw",
         "/stereo/camera_driver/image_raw",
     ]
+    assert config.recorders[0].file_name == "robot_state"
     assert all(
         excluded_topic not in config.rosbag_topics
         for excluded_topic in (
@@ -104,8 +109,34 @@ def test_shipped_endoscope_guidance_ui_uses_left_camera_preview():
     )
 
     assert config.camera_topic == "/laparoscope/camera/left/image_raw"
-    assert config.generation is None
+    assert config.generation is not None
+    assert config.generation.dataset_schema.name == "endoscope_guidance"
+    assert config.generation.dataset_schema.action_columns[-1] == (
+        "relative_pivot_roll_delta"
+    )
     assert config.session.output_folder == ""
+
+
+@pytest.mark.unit
+def test_shipped_endoscope_guidance_annotation_config_accepts_legacy_recordings():
+    recordings_root = "/data/legacy_endoscope_guidance"
+    config = parse_config_from_cli(
+        config_class=LibraryAppConfig,
+        arguments=[
+            "--config_path",
+            str(ENDOSCOPE_GUIDANCE_ANNOTATION_CONFIG),
+            "--recordings_root",
+            recordings_root,
+            "--generation.states.0.state_file",
+            "ur5e.csv",
+        ],
+    )
+
+    assert config.recordings_root == recordings_root
+    assert config.host == "0.0.0.0"
+    assert config.generation is not None
+    assert config.generation.states[0].state_file == "ur5e.csv"
+    assert len(config.generation.dataset_transforms) == 1
 
 
 @pytest.mark.unit

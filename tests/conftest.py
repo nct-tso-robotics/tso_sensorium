@@ -23,6 +23,8 @@ def schema_factory():
         arms=None,
         task="retract the bowel",
         fps=30,
+        coordinate_frame_features=None,
+        auxiliary_features=None,
     ) -> DatasetSchema:
         if cameras is None:
             cameras = [
@@ -36,8 +38,18 @@ def schema_factory():
                     action_columns=["dx", "dy"],
                 )
             ]
+        if coordinate_frame_features is None:
+            coordinate_frame_features = {}
+        if auxiliary_features is None:
+            auxiliary_features = {}
         return DatasetSchema(
-            name="dataset", fps=fps, cameras=cameras, arms=arms, task=task
+            name="dataset",
+            fps=fps,
+            cameras=cameras,
+            arms=arms,
+            task=task,
+            coordinate_frame_features=coordinate_frame_features,
+            auxiliary_features=auxiliary_features,
         )
 
     return factory

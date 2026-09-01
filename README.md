@@ -330,13 +330,29 @@ python -m tso_sensorium.scripts.generate_dataset \
     --config_path configs/dataset/bowel_retraction.yaml \
     --recordings_root /data/recordings \
     --writer.type lerobot --writer.output_root /data/lerobot
+
+# Recompute transformed actions without re-encoding observations or videos:
+python -m tso_sensorium.scripts.generate_dataset \
+    --config_path configs/dataset/bowel_retraction.yaml \
+    --recordings_root /data/recordings \
+    --writer.type lerobot_action_update \
+    --writer.dataset_root /data/lerobot
 ```
 
 When the config has an `annotations:` section, each episode's phase
 segments are joined onto the aligned table as an integer phase column and
-a language instruction column, and the writer stores the legend plus
-generation statistics next to the dataset (`dataset_metadata.json`), so a
-dataset is always reconstructable from recordings + annotations + config.
+a language instruction column. Every writer stores generation statistics
+and any configured `schema.coordinate_frame_features` in
+`dataset_metadata.json`. Coordinate-frame entries list their exact component
+columns, named frame, and whether that frame is fixed, moving, or unknown
+across timesteps. LeRobot exports can also carry named
+`schema.auxiliary_features`, such as an integer phase label, without folding
+them into the policy action vector. Action-only updates require an existing
+LeRobot v3 dataset whose episode order, lengths, schema, observations,
+auxiliary values, and task strings exactly match the regenerated episodes.
+They atomically replace only actions, derived action statistics, and
+`dataset_metadata.json`; a validation failure or cancellation leaves the
+existing dataset unchanged.
 
 ### Library usage
 

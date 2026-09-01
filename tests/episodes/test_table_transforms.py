@@ -1,5 +1,7 @@
 """Tests for tso_sensorium.episodes.table_transforms module."""
 
+from unittest.mock import patch
+
 from pydantic import TypeAdapter
 import numpy as np
 import pandas as pd
@@ -9,11 +11,14 @@ from tso_sensorium.episodes.table_transforms import (
     AddConstantColumns,
     AnyTableTransform,
     DropColumns,
+    DropTerminalRows,
     FixedTransformToCameraFrame,
+    ForwardDifferenceColumns,
     ParseVector3Columns,
     RenameColumns,
     RotateByQuaternionColumns,
     SumColumns,
+    WrappedAngleDifferenceColumns,
     parse_vector3_string,
     rotate_point_with_quaternion,
 )
@@ -130,6 +135,28 @@ class TestFixedTransformToCameraFrame:
 
 class TestRotateByQuaternionColumns:
     @pytest.mark.unit
+    def test_passes_writable_contiguous_arrays_to_scipy(self, position_table_factory):
+        table = position_table_factory(length=2)
+        table[["qx", "qy", "qz"]] = 0.0
+        table["qw"] = 1.0
+        transform = RotateByQuaternionColumns(
+            point_columns=["x", "y", "z"],
+            quaternion_columns=["qx", "qy", "qz", "qw"],
+            output_columns=["cx", "cy", "cz"],
+        )
+
+        with patch("tso_sensorium.episodes.table_transforms.Rotation") as rotation:
+            rotation.from_quat.return_value.apply.return_value = np.zeros((2, 3))
+            transform.apply(table=table)
+
+        quaternions = rotation.from_quat.call_args.kwargs["quat"]
+        points = rotation.from_quat.return_value.apply.call_args.kwargs["vectors"]
+        assert quaternions.flags.writeable
+        assert quaternions.flags.c_contiguous
+        assert points.flags.writeable
+        assert points.flags.c_contiguous
+
+    @pytest.mark.unit
     def test_identity_quaternion_copies_positions(self, position_table_factory):
         table = position_table_factory(length=2)
         table[["qx", "qy", "qz"]] = 0.0
@@ -142,6 +169,99 @@ class TestRotateByQuaternionColumns:
         result = transform.apply(table=table)
         np.testing.assert_allclose(result["cx"], result["x"])
         np.testing.assert_allclose(result["cy"], result["y"])
+
+    @pytest.mark.unit
+    def test_inverse_rotation_maps_base_vector_into_camera_frame(self):
+        table = pd.DataFrame(
+            {
+                "x": [0.0],
+                "y": [1.0],
+                "z": [0.0],
+                "qx": [0.0],
+                "qy": [0.0],
+                "qz": [np.sqrt(0.5)],
+                "qw": [np.sqrt(0.5)],
+            }
+        )
+        transform = RotateByQuaternionColumns(
+            point_columns=["x", "y", "z"],
+            quaternion_columns=["qx", "qy", "qz", "qw"],
+            output_columns=["cx", "cy", "cz"],
+            inverse=True,
+        )
+
+        result = transform.apply(table=table)
+
+        np.testing.assert_allclose(
+            result[["cx", "cy", "cz"]].iloc[0],
+            [1.0, 0.0, 0.0],
+            atol=1e-7,
+        )
+
+
+class TestTemporalDifferences:
+    @pytest.mark.unit
+    def test_forward_difference_keeps_terminal_row_missing(self):
+        table = pd.DataFrame({"x": [1.0, 4.0, 10.0], "y": [2.0, 1.0, 5.0]})
+        transform = ForwardDifferenceColumns(
+            columns=["x", "y"], output_columns=["dx", "dy"]
+        )
+
+        result = transform.apply(table=table)
+
+        np.testing.assert_allclose(result[["dx", "dy"]].iloc[:2], [[3, -1], [6, 4]])
+        assert result[["dx", "dy"]].iloc[-1].isna().all()
+
+    @pytest.mark.unit
+    def test_wrapped_angle_difference_takes_shortest_path(self):
+        table = pd.DataFrame({"roll": [np.pi - 0.1, -np.pi + 0.2]})
+        transform = WrappedAngleDifferenceColumns(
+            columns=["roll"], output_columns=["delta_roll"]
+        )
+
+        result = transform.apply(table=table)
+
+        assert result["delta_roll"].iloc[0] == pytest.approx(0.3)
+        assert np.isnan(result["delta_roll"].iloc[1])
+
+    @pytest.mark.unit
+    def test_drop_terminal_rows_removes_only_rows_without_successors(self):
+        table = pd.DataFrame({"x": [1.0, 2.0, 3.0]})
+
+        result = DropTerminalRows(count=1).apply(table=table)
+
+        assert result["x"].tolist() == [1.0, 2.0]
+
+    @pytest.mark.unit
+    def test_difference_is_rotated_with_transition_start_quaternion(self):
+        table = pd.DataFrame(
+            {
+                "x": [1.0, 1.0],
+                "y": [0.0, 1.0],
+                "z": [0.0, 0.0],
+                "qx": [0.0, 0.0],
+                "qy": [0.0, 0.0],
+                "qz": [np.sqrt(0.5), 0.0],
+                "qw": [np.sqrt(0.5), 1.0],
+            }
+        )
+        table = ForwardDifferenceColumns(
+            columns=["x", "y", "z"], output_columns=["dx", "dy", "dz"]
+        ).apply(table=table)
+        table = DropTerminalRows(count=1).apply(table=table)
+
+        result = RotateByQuaternionColumns(
+            point_columns=["dx", "dy", "dz"],
+            quaternion_columns=["qx", "qy", "qz", "qw"],
+            output_columns=["camera_dx", "camera_dy", "camera_dz"],
+            inverse=True,
+        ).apply(table=table)
+
+        np.testing.assert_allclose(
+            result[["camera_dx", "camera_dy", "camera_dz"]].iloc[0],
+            [1.0, 0.0, 0.0],
+            atol=1e-7,
+        )
 
 
 class TestSimpleColumnOperations:

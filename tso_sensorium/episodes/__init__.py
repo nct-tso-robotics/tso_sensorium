@@ -2,6 +2,9 @@
 
 from tso_sensorium.episodes.builder import EpisodeGenerator
 from tso_sensorium.episodes.dataset_builder import (
+    BuildCancellationToken,
+    BuildPhase,
+    BuildProgress,
     BuildReport,
     DatasetBuilder,
     discover_episode_directories,
@@ -15,6 +18,9 @@ from tso_sensorium.episodes.schema import (
 
 __all__ = [
     "ArmFeature",
+    "BuildCancellationToken",
+    "BuildPhase",
+    "BuildProgress",
     "BuildReport",
     "CameraFeature",
     "DatasetBuilder",

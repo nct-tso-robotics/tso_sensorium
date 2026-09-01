@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import abc
 import importlib.util
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, Dict, List, Literal, Optional, Union
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from tso_sensorium.configuration import ConfigModel, OverrideValue, set_by_path
+from tso_sensorium.episodes.dataset_transforms import AnyDatasetTransform
 from tso_sensorium.episodes.legend import (
     DATASET_METADATA_FILE_NAME,
     DatasetMetadata,
@@ -25,9 +27,27 @@ from tso_sensorium.export.csv_writer import CsvDatasetWriter
 from tso_sensorium.processing.frame_transforms import AnyFrameTransform
 
 if importlib.util.find_spec("lerobot") is not None:
+    from tso_sensorium.export.lerobot_action_update_writer import (
+        LeRobotActionUpdateWriter,
+    )
     from tso_sensorium.export.lerobot_writer import LeRobotDatasetWriter
 else:
+    LeRobotActionUpdateWriter = None
     LeRobotDatasetWriter = None
+
+
+class LanguageSource(str, Enum):
+    """Source used to populate language labels during generation."""
+
+    ANNOTATION = "annotation"
+    PHASE_LEGEND = "phase_legend"
+
+
+class LegendSource(str, Enum):
+    """Source used to resolve phase definitions during generation."""
+
+    AUTO = "auto"
+    CONFIG = "config"
 
 
 class AnnotationsConfig(ConfigModel):
@@ -41,6 +61,9 @@ class AnnotationsConfig(ConfigModel):
         file_name: Annotations file inside each episode folder.
         phase_column: Output column holding the integer phase label.
         language_column: Output column holding the language instruction.
+        language_source: Whether segment annotations or the phase legend supply
+            language labels.
+        legend_source: Whether root metadata may override the configured legend.
         legend: Inline dataset metadata with the phase legend; when
             ``None``, the metadata file at the recordings root is used.
         metadata_file: Metadata file name at the recordings root.
@@ -51,16 +74,27 @@ class AnnotationsConfig(ConfigModel):
     file_name: str = "annotations.json"
     phase_column: str = "phase"
     language_column: str = "language_instruction"
+    language_source: LanguageSource = LanguageSource.ANNOTATION
+    legend_source: LegendSource = LegendSource.AUTO
     legend: Optional[DatasetMetadata] = None
     metadata_file: str = DATASET_METADATA_FILE_NAME
     require_full_coverage: bool = False
 
+    @model_validator(mode="after")
+    def validate_legend_source(self) -> "AnnotationsConfig":
+        """Require an inline legend when configuration is authoritative."""
+        if self.legend_source == LegendSource.CONFIG and self.legend is None:
+            raise ValueError(
+                "annotations.legend is required when legend_source is 'config'"
+            )
+        return self
+
     def resolve_legend(self, recordings_root: Path) -> DatasetMetadata:
         """Resolve the effective dataset metadata for a recordings root.
 
-        The metadata file at the root wins when it defines a legend (it is
-        what the dashboard edits); the inline ``legend`` only seeds new
-        datasets that have no file yet.
+        In auto mode, root metadata wins when it defines a legend and the
+        inline legend seeds datasets without one. Config mode always uses the
+        inline legend.
 
         Args:
             recordings_root: Directory containing one folder per episode.
@@ -68,6 +102,12 @@ class AnnotationsConfig(ConfigModel):
         Returns:
             The effective dataset metadata.
         """
+        if self.legend_source == LegendSource.CONFIG:
+            if self.legend is None:
+                raise RuntimeError(
+                    "Validated annotations config is missing its required legend"
+                )
+            return self.legend
         metadata = DatasetMetadata.load(path=Path(recordings_root) / self.metadata_file)
         if metadata.phase_legend:
             return metadata
@@ -170,8 +210,41 @@ class LeRobotWriterConfig(WriterConfig):
         )
 
 
+class LeRobotActionUpdateWriterConfig(WriterConfig):
+    """Transactional action-only update of an existing LeRobot v3 dataset.
+
+    Args:
+        dataset_root: Existing LeRobot dataset root to update.
+        task_column: Optional episode-table column used to validate task strings.
+    """
+
+    type: Literal["lerobot_action_update"] = "lerobot_action_update"
+    dataset_root: str = ""
+    task_column: Optional[str] = None
+
+    def build(self, recordings_root: Path) -> DatasetWriter:
+        if LeRobotActionUpdateWriter is None:
+            raise ImportError(
+                "LeRobot action update requires the lerobot extra:"
+                " pip install 'tso-sensorium[lerobot]'"
+            )
+        if not self.dataset_root:
+            raise ValueError(
+                "writer.dataset_root is required for LeRobot action update"
+            )
+        return LeRobotActionUpdateWriter(
+            dataset_root=self.dataset_root,
+            task_column=self.task_column,
+        )
+
+
 AnyWriterConfig = Annotated[
-    Union[CsvWriterConfig, LeRobotWriterConfig], Field(discriminator="type")
+    Union[
+        CsvWriterConfig,
+        LeRobotWriterConfig,
+        LeRobotActionUpdateWriterConfig,
+    ],
+    Field(discriminator="type"),
 ]
 
 
@@ -186,6 +259,8 @@ class DatasetGenerationConfig(ConfigModel):
         states: State CSV sources aligned into each episode.
         table_transforms: Transformations applied to each aligned table,
             in order.
+        dataset_transforms: Transformations using all successfully assembled
+            episodes.
         writer: Output format selection.
         annotations: Phase and language annotation join; disabled when
             ``None``.
@@ -208,6 +283,7 @@ class DatasetGenerationConfig(ConfigModel):
     videos: List[VideoSourceConfig] = Field(default_factory=list)
     states: List[StateSourceConfig] = Field(default_factory=list)
     table_transforms: List[AnyTableTransform] = Field(default_factory=list)
+    dataset_transforms: List[AnyDatasetTransform] = Field(default_factory=list)
     writer: AnyWriterConfig = Field(default_factory=CsvWriterConfig)
     annotations: Optional[AnnotationsConfig] = None
     sync_column: str = "time"
@@ -215,6 +291,23 @@ class DatasetGenerationConfig(ConfigModel):
     save_frames: bool = False
     n_jobs: int = -1
     exclude_directory_substrings: List[str] = Field(default_factory=lambda: [".zarr"])
+
+    @model_validator(mode="after")
+    def resolve_writer_task_column(self) -> "DatasetGenerationConfig":
+        """Use the configured annotation language column for LeRobot tasks."""
+        if self.annotations is None:
+            return self
+        if (
+            isinstance(
+                self.writer,
+                (LeRobotWriterConfig, LeRobotActionUpdateWriterConfig),
+            )
+            and self.writer.task_column is None
+        ):
+            self.writer = self.writer.model_copy(
+                update={"task_column": self.annotations.language_column}
+            )
+        return self
 
 
 def apply_generation_overrides(

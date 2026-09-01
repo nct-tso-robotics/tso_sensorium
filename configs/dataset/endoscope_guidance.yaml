@@ -1,0 +1,186 @@
+# Endoscope-guidance demonstrations recorded from the camera-mounted robot.
+# The recorded quaternion maps camera-frame vectors into the robot base. State
+# uses its inverse to express the relative tip displacement in the current
+# camera frame. Actions are differenced in the fixed robot base first and then
+# rotated into the camera frame at the start of each transition.
+recordings_root: ""
+save_frames: false
+n_jobs: -1
+sync_column: time
+
+schema:
+  name: endoscope_guidance
+  fps: 5
+  task: automate the movement of the endoscope
+  cameras:
+    - name: left
+      frame_column: frameLeftRectifiedPath
+      height: 540
+      width: 960
+    - name: right
+      frame_column: frameRightRectifiedPath
+      height: 540
+      width: 960
+  arms:
+    - name: camera
+      state_columns:
+        - camera_frame_tip_position_x
+        - camera_frame_tip_position_y
+        - camera_frame_tip_position_z
+        - relative_pivot_roll
+      action_columns:
+        - camera_frame_tip_delta_x
+        - camera_frame_tip_delta_y
+        - camera_frame_tip_delta_z
+        - relative_pivot_roll_delta
+  coordinate_frame_features:
+    camera_frame_tip_position:
+      columns:
+        - camera_frame_tip_position_x
+        - camera_frame_tip_position_y
+        - camera_frame_tip_position_z
+      frame: camera
+      frame_temporality: moving
+    camera_frame_tip_delta:
+      columns:
+        - camera_frame_tip_delta_x
+        - camera_frame_tip_delta_y
+        - camera_frame_tip_delta_z
+      frame: camera
+      frame_temporality: moving
+  auxiliary_features:
+    task_phase:
+      columns:
+        - task_phase
+      dtype: int64
+
+videos:
+  - video_file: laparoscope_combined.avi
+    timestamps_file: laparoscope_combined.csv
+    frame_column: frameLeftRectifiedPath
+    frames_directory: framesLeftRectified
+    preprocess:
+      - type: deinterlace
+        side: left
+      - type: resize
+        width: 960
+        height: 540
+      - type: rectify
+        side: left
+        calibration_path: package://storz_endoscope_calibration.yml
+  - video_file: laparoscope_combined.avi
+    timestamps_file: laparoscope_combined.csv
+    frame_column: frameRightRectifiedPath
+    frames_directory: framesRightRectified
+    preprocess:
+      - type: deinterlace
+        side: right
+      - type: resize
+        width: 960
+        height: 540
+      - type: rectify
+        side: right
+        calibration_path: package://storz_endoscope_calibration.yml
+
+states:
+  - state_file: robot_state.csv
+    columns:
+      - relative_tip_position
+      - relative_pivot_rpy
+  - state_file: robot_camera_transform.csv
+    columns:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
+
+table_transforms:
+  - type: parse_vector3
+    column: relative_tip_position
+    output_columns:
+      - relative_tip_position_x
+      - relative_tip_position_y
+      - relative_tip_position_z
+  - type: parse_vector3
+    column: relative_pivot_rpy
+    output_columns:
+      - relative_pivot_roll
+      - relative_pivot_pitch
+      - relative_pivot_yaw
+  - type: forward_difference
+    columns:
+      - relative_tip_position_x
+      - relative_tip_position_y
+      - relative_tip_position_z
+    output_columns:
+      - robot_frame_tip_delta_x
+      - robot_frame_tip_delta_y
+      - robot_frame_tip_delta_z
+  - type: wrapped_angle_difference
+    columns:
+      - relative_pivot_roll
+    output_columns:
+      - relative_pivot_roll_delta
+  - type: drop_terminal_rows
+    count: 1
+  - type: rotate_by_quaternion_columns
+    point_columns:
+      - relative_tip_position_x
+      - relative_tip_position_y
+      - relative_tip_position_z
+    quaternion_columns:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
+    output_columns:
+      - camera_frame_tip_position_x
+      - camera_frame_tip_position_y
+      - camera_frame_tip_position_z
+    inverse: true
+  - type: rotate_by_quaternion_columns
+    point_columns:
+      - robot_frame_tip_delta_x
+      - robot_frame_tip_delta_y
+      - robot_frame_tip_delta_z
+    quaternion_columns:
+      - quaternion_x
+      - quaternion_y
+      - quaternion_z
+      - quaternion_w
+    output_columns:
+      - camera_frame_tip_delta_x
+      - camera_frame_tip_delta_y
+      - camera_frame_tip_delta_z
+    inverse: true
+  - type: drop_columns
+    columns:
+      - relative_tip_position
+      - relative_pivot_rpy
+      - relative_pivot_pitch
+      - relative_pivot_yaw
+
+annotations:
+  phase_column: task_phase
+  language_column: language
+  language_source: phase_legend
+  legend_source: config
+  legend: !include instructions/endoscope_guidance.yaml
+
+dataset_transforms:
+  - type: percentile_denoise_columns
+    column_groups:
+      translation:
+        columns:
+          - camera_frame_tip_delta_x
+          - camera_frame_tip_delta_y
+          - camera_frame_tip_delta_z
+        percentile: 30.0
+      roll:
+        columns:
+          - relative_pivot_roll_delta
+        percentile: 20.0
+
+writer:
+  type: csv
+  output_root: null

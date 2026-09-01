@@ -8,7 +8,7 @@ rosbag_topics:
 
 recorders:
   - type: topic
-    file_name: camera_robot_state
+    file_name: robot_state
     topic_name: /ur5e_rcm_twist_controller/RobotState
     message_type: testbed_msgs.msg.RobotState
     queue_size: 100

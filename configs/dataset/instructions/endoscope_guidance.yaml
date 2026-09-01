@@ -1,0 +1,27 @@
+dataset_name: endoscope_guidance
+task: automate the movement of the endoscope
+phase_legend:
+  0:
+    name: focus
+    instructions:
+      - Zoom in toward the region between the surgical instruments.
+  1:
+    name: overview
+    instructions:
+      - Zoom out to obtain a broad view of the operative field.
+  2:
+    name: level_the_horizon
+    instructions:
+      - Rotate the camera until the horizon is level.
+  3:
+    name: follow_anatomy
+    instructions:
+      - Follow the surgical instrument tip along the anatomical contour.
+  4:
+    name: reach_tip
+    instructions:
+      - Search the scene for the tip of the surgical instrument.
+  5:
+    name: stop
+    instructions:
+      - Do not move the camera.

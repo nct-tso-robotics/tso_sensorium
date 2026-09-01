@@ -10,11 +10,18 @@ import pandas as pd
 
 from tso_sensorium.episodes.annotations import EpisodeAnnotations
 from tso_sensorium.episodes.builder import EpisodeGenerator
-from tso_sensorium.episodes.dataset_builder import BuildReport, DatasetBuilder
+from tso_sensorium.episodes.dataset_builder import (
+    BuildCancellationToken,
+    BuildReport,
+    DatasetBuilder,
+    ProgressCallback,
+)
 from tso_sensorium.episodes.generation_config import (
     AnnotationsConfig,
     DatasetGenerationConfig,
+    LanguageSource,
 )
+from tso_sensorium.episodes.legend import DATASET_METADATA_FILE_NAME, DatasetMetadata
 from tso_sensorium.episodes.schema import Episode
 from tso_sensorium.processing.frame_transforms import compose_transforms
 
@@ -116,7 +123,10 @@ def apply_annotations(
             languages.append("")
             continue
         phases.append(segment.phase)
-        if segment.language is not None:
+        if (
+            annotations_config.language_source == LanguageSource.ANNOTATION
+            and segment.language is not None
+        ):
             language = segment.language
         else:
             language = sampled_instructions.get(segment.phase, "")
@@ -126,11 +136,17 @@ def apply_annotations(
     return table
 
 
-def generate_dataset(config: DatasetGenerationConfig) -> BuildReport:
+def generate_dataset(
+    config: DatasetGenerationConfig,
+    progress_callback: ProgressCallback | None = None,
+    cancellation_token: BuildCancellationToken | None = None,
+) -> BuildReport:
     """Generate a dataset from a folder of recorded episodes.
 
     Args:
         config: Dataset generation configuration.
+        progress_callback: Receives progress snapshots from the coordinator.
+        cancellation_token: Cooperative cancellation signal.
 
     Returns:
         Report with written episode names and per-episode failures.
@@ -146,7 +162,9 @@ def generate_dataset(config: DatasetGenerationConfig) -> BuildReport:
                 f" each other. Got: {frames_directories}"
             )
     recordings_root = Path(config.recordings_root)
-    dataset_metadata = None
+    dataset_metadata = DatasetMetadata.load(
+        path=recordings_root / DATASET_METADATA_FILE_NAME
+    )
     if config.annotations is not None:
         dataset_metadata = config.annotations.resolve_legend(
             recordings_root=recordings_root
@@ -158,6 +176,9 @@ def generate_dataset(config: DatasetGenerationConfig) -> BuildReport:
         n_jobs=config.n_jobs,
         exclude_substrings=config.exclude_directory_substrings,
         dataset_metadata=dataset_metadata,
+        dataset_transforms=config.dataset_transforms,
+        progress_callback=progress_callback,
+        cancellation_token=cancellation_token,
     )
     report = builder.build(recordings_root=recordings_root)
     return report
