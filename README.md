@@ -466,3 +466,6 @@ pytest tests/recording/test_ros1_adapter.py
 For non-interactive use, the equivalents are `pixi run test`, `pixi run
 test-all`, `pixi run lint`, and `pixi run -e ros1 pytest
 tests/recording/test_ros1_adapter.py`.
+
+CI checks pull requests and `main`, including ROS 1/2 tests and package builds.
+Published GitHub releases upload to PyPI after those checks pass.
