@@ -8,7 +8,7 @@ import pytest
 rospy = pytest.importorskip("rospy")
 flask = pytest.importorskip("flask")
 
-from sensor_msgs.msg import Image  # noqa: E402
+from sensor_msgs.msg import CameraInfo, Image  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 
 from tso_sensorium.episodes.generation_config import (  # noqa: E402
@@ -30,6 +30,7 @@ from tso_sensorium.recording.ros1.web_service import (  # noqa: E402
 
 STATE_TOPIC = "/webtest/state"
 IMAGE_TOPIC = "/webtest/image"
+CAMERA_INFO_TOPIC = "/webtest/camera_info"
 PUBLISH_TIMEOUT_SECONDS = 5.0
 PUBLISH_INTERVAL_SECONDS = 0.05
 
@@ -80,7 +81,7 @@ def service_factory(ros_node, tmp_path):
 def _publish_until_alive(
     service: RecordingService,
     publisher: rospy.topics.Publisher,
-    message: String | Image,
+    message: String | Image | CameraInfo,
     topic_name: str,
 ) -> None:
     deadline = time.monotonic() + PUBLISH_TIMEOUT_SECONDS
@@ -236,11 +237,16 @@ def test_video_playback_endpoint_transcodes_to_h264(
     service_factory, ros_node, tmp_path, rng
 ):
     video_config = VideoRecorderConfig(
-        file_name="camera", topic_name=IMAGE_TOPIC, frames_per_second=15
+        file_name="camera",
+        topic_name=IMAGE_TOPIC,
+        frames_per_second=15,
+        liveness_topic=CAMERA_INFO_TOPIC,
+        liveness_message_type="sensor_msgs.msg.CameraInfo",
     )
     service = service_factory(recorders=[video_config])
     client = create_app(service=service).test_client()
     image_publisher = rospy.Publisher(IMAGE_TOPIC, Image, queue_size=10)
+    camera_info_publisher = rospy.Publisher(CAMERA_INFO_TOPIC, CameraInfo, queue_size=1)
     message = Image()
     message.height = 48
     message.width = 64
@@ -255,10 +261,11 @@ def test_video_playback_endpoint_transcodes_to_h264(
     message.header.stamp = rospy.Time.now()
     _publish_until_alive(
         service=service,
-        publisher=image_publisher,
-        message=message,
+        publisher=camera_info_publisher,
+        message=CameraInfo(header=message.header, height=48, width=64),
         topic_name=IMAGE_TOPIC,
     )
+    assert image_publisher.get_num_connections() == 0
 
     recording_start = client.post(
         "/api/recording/start", json={"episode_name": "video_ep"}
@@ -271,6 +278,10 @@ def test_video_playback_endpoint_transcodes_to_h264(
         image_publisher.publish(message)
         time.sleep(0.1)
     client.post("/api/recording/stop")
+    deadline = time.monotonic() + PUBLISH_TIMEOUT_SECONDS
+    while image_publisher.get_num_connections() and time.monotonic() < deadline:
+        time.sleep(PUBLISH_INTERVAL_SECONDS)
+    assert image_publisher.get_num_connections() == 0
 
     recorded = tmp_path / "episodes" / episode_name / "camera.mp4"
     assert recorded.is_file() and recorded.stat().st_size > 0

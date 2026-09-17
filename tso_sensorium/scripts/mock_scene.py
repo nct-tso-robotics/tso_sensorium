@@ -12,6 +12,7 @@ FRAME_WIDTH = 960
 PUBLISH_RATE_HZ = 15
 GRIPPER_INTERVAL_TICKS = 45
 CAMERA_TOPIC = "/mock/camera"
+CAMERA_INFO_TOPIC = "/mock/camera_info"
 POSE_TOPIC = "/mock/pose"
 GRIPPER_TOPIC = "/mock/gripper"
 

@@ -3,12 +3,17 @@
 import importlib.util
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 from tso_sensorium.configuration import load_config
 import pytest
 from pydantic import ValidationError
 
-from tso_sensorium.episodes.legend import DatasetMetadata, PhaseDefinition
+from tso_sensorium.episodes.legend import (
+    DatasetMetadata,
+    PhaseDefinition,
+    load_phase_instructions,
+)
 from tso_sensorium.episodes.generation_config import (
     AnnotationsConfig,
     CsvWriterConfig,
@@ -28,6 +33,52 @@ BOWEL_RETRACTION_CONFIG = (
 ENDOSCOPE_GUIDANCE_CONFIG = (
     REPOSITORY_ROOT / "configs" / "dataset" / "endoscope_guidance.yaml"
 )
+
+
+@pytest.mark.unit
+def test_legend_asset_reference_uses_the_public_phase_loader() -> None:
+    asset_reference = "package://instructions/endoscope_guidance.yaml"
+    metadata = DatasetMetadata(
+        phase_legend={5: PhaseDefinition(name="stop", instructions=["Hold."])}
+    )
+    with patch(
+        "tso_sensorium.episodes.generation_config.load_phase_legend",
+        return_value=metadata,
+    ) as load_legend:
+        result = AnnotationsConfig.load_legend_reference(value=asset_reference)
+
+    load_legend.assert_called_once_with(config_path=asset_reference)
+    assert result.phase_legend[5].instructions == ["Hold."]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "config_path,asset_reference",
+    [
+        (
+            ENDOSCOPE_GUIDANCE_CONFIG,
+            "package://instructions/endoscope_guidance.yaml",
+        ),
+        (
+            BOWEL_RETRACTION_CONFIG,
+            "package://instructions/bowel_retraction_phantom.yaml",
+        ),
+    ],
+)
+def test_bundled_generation_uses_same_mapping_as_live_publisher(
+    config_path: Path, asset_reference: str, tmp_path: Path
+) -> None:
+    DatasetMetadata(
+        phase_legend={99: PhaseDefinition(name="unrelated", instructions=["Old."])}
+    ).save(path=tmp_path / "dataset_metadata.json")
+    config = load_config(config_class=DatasetGenerationConfig, config_path=config_path)
+    metadata = config.annotations.resolve_legend(recordings_root=tmp_path)
+    publisher_phases = load_phase_instructions(config_path=asset_reference)
+
+    assert {
+        label: tuple(definition.instructions)
+        for label, definition in metadata.phase_legend.items()
+    } == publisher_phases
 
 
 @pytest.mark.unit
@@ -91,6 +142,8 @@ def test_shipped_endoscope_guidance_config_derives_moving_frame_actions():
         "quaternion_z",
         "quaternion_w",
     ]
+    assert config.states[2].state_file == "language_instruction.csv"
+    assert config.states[2].columns == ["language_instruction"]
     roll_transform = config.table_transforms[1]
     assert roll_transform.column == "relative_pivot_rpy"
     assert roll_transform.output_columns == [

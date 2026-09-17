@@ -12,6 +12,8 @@ session:
     - type: video
       file_name: camera
       topic_name: /mock/camera
+      liveness_topic: /mock/camera_info
+      liveness_message_type: sensor_msgs.msg.CameraInfo
       frames_per_second: 15
     - type: topic
       file_name: pose

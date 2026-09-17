@@ -1,6 +1,7 @@
 """Tests for tso_sensorium.recording.ros2.web_service module."""
 
 import time
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -9,13 +10,14 @@ rclpy = pytest.importorskip("rclpy")
 flask = pytest.importorskip("flask")
 
 from rclpy.node import Node  # noqa: E402
-from sensor_msgs.msg import Image  # noqa: E402
+from sensor_msgs.msg import CameraInfo, Image  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
 
 from tso_sensorium.recording.config import (  # noqa: E402
     RecordingSessionConfig,
     RecordingUIConfig,
     TopicRecorderConfig,
+    VideoRecorderConfig,
 )
 from tso_sensorium.recording.ros2.web_service import (  # noqa: E402
     build_recording_service,
@@ -135,6 +137,46 @@ def test_camera_feed_and_stream(service_factory, ros_node):
     chunk = next(response.response)
     assert b"Content-Type: image/jpeg" in chunk
     response.close()
+
+
+@pytest.mark.integration
+def test_video_readiness_uses_camera_info_without_subscribing_to_images(
+    ros_node: Node, tmp_path: Path
+) -> None:
+    image_topic = "/webtest2/idle/image_raw"
+    status_topic = "/webtest2/idle/camera_info"
+    config = RecordingUIConfig(
+        session=RecordingSessionConfig(
+            output_folder=str(tmp_path / "idle_video"),
+            recorders=[
+                VideoRecorderConfig(
+                    file_name="camera",
+                    topic_name=image_topic,
+                    frames_per_second=30.0,
+                    liveness_topic=status_topic,
+                    liveness_message_type="sensor_msgs.msg.CameraInfo",
+                )
+            ],
+        ),
+        camera_topic="",
+        staleness_seconds=1.0,
+    )
+    service = build_recording_service(node=ros_node, config=config)
+    camera_info_publisher = ros_node.create_publisher(
+        CameraInfo, status_topic, QUEUE_DEPTH
+    )
+    _publish_until(
+        node=ros_node,
+        publisher=camera_info_publisher,
+        message=CameraInfo(height=48, width=64),
+        condition=lambda: service.liveness.is_alive(topic_name=image_topic),
+    )
+
+    assert ros_node.count_subscribers(image_topic) == 0
+    sensor = service.status()["sensors"][0]
+    assert sensor["topic"] == image_topic
+    assert sensor["ready"] is True
+    service.close()
 
 
 @pytest.mark.integration

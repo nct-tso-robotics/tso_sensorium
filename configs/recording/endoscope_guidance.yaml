@@ -5,6 +5,7 @@ record_rosbag: false
 rosbag_topics:
   - /ur5e_rcm_twist_controller/RobotState
   - /robot_camera_transform
+  - /language_instruction
 
 recorders:
   - type: topic
@@ -53,18 +54,34 @@ recorders:
       - quaternion_z
       - quaternion_w
 
+  - type: topic
+    file_name: language_instruction
+    topic_name: /language_instruction
+    message_type: testbed_msgs.msg.LanguageInstruction
+    queue_size: 100
+    fields:
+      - instruction
+    csv_header:
+      - language_instruction
+
   - type: video
     file_name: laparoscope_left
     topic_name: /laparoscope/camera/left/image_raw
+    liveness_topic: /laparoscope/camera/left/camera_info
+    liveness_message_type: sensor_msgs.msg.CameraInfo
     frames_per_second: 30.0
 
   - type: video
     file_name: laparoscope_right
     topic_name: /laparoscope/camera/right/image_raw
+    liveness_topic: /laparoscope/camera/right/camera_info
+    liveness_message_type: sensor_msgs.msg.CameraInfo
     frames_per_second: 30.0
 
   - type: video
     file_name: laparoscope_combined
     topic_name: /stereo/camera_driver/image_raw
+    liveness_topic: /stereo/camera_driver/camera_info
+    liveness_message_type: sensor_msgs.msg.CameraInfo
     frames_per_second: 10.0
     lossless_compression: true

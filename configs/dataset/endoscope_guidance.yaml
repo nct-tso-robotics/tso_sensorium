@@ -93,6 +93,9 @@ states:
       - quaternion_y
       - quaternion_z
       - quaternion_w
+  - state_file: language_instruction.csv
+    columns:
+      - language_instruction
 
 table_transforms:
   - type: parse_vector3
@@ -165,7 +168,7 @@ annotations:
   language_column: language
   language_source: phase_legend
   legend_source: config
-  legend: !include instructions/endoscope_guidance.yaml
+  legend: package://instructions/endoscope_guidance.yaml
 
 dataset_transforms:
   - type: percentile_denoise_columns

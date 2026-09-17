@@ -217,6 +217,33 @@ python -m tso_sensorium.scripts.record_ui \
     --config_path configs/recording/force_session_ui.yaml
 ```
 
+Video readiness uses an explicitly configured lightweight per-frame status
+topic, not raw image subscriptions. Each video entry in the recording YAML
+must specify `liveness_topic` when used with the UI; topic names are never
+inferred. The bundled setups use `sensor_msgs/CameraInfo` messages.
+Recording still subscribes to the configured image topic when an episode
+starts and releases that subscription when it stops. The configured live
+preview is a separate, intentional image subscription.
+
+Set the status topic and its message type alongside the recorded image topic:
+
+```yaml
+- type: video
+  file_name: camera
+  topic_name: /camera/image_raw
+  liveness_topic: /camera/camera_info
+  liveness_message_type: sensor_msgs.msg.CameraInfo
+```
+
+Other per-frame status messages, such as `std_msgs.msg.Header`, can be selected
+with `liveness_message_type`. Command-line recording does not use these fields.
+The status topic must publish with each acquired frame; latched calibration
+alone does not establish ongoing camera freshness. A missing or stale status
+topic keeps the source unready rather than silently falling back to expensive
+raw-image subscriptions. If a camera can only provide raw images for status,
+explicitly select that image topic and `sensor_msgs.msg.Image`, accepting its
+bandwidth cost. This affects readiness only, not the recording format.
+
 Open `http://<host>:8080` from any machine on the network. The dashboard
 has two sections: **Record** (live camera feed, per-sensor liveness,
 start/stop of demonstrations, per-episode topic selection) and **Library**
@@ -300,6 +327,30 @@ From the dashboard you can:
 - **Generate datasets** with per-run options (format, output root, frame
   extraction, sync tolerance); discarded episodes are listed with the
   reason.
+
+### Phase legends
+
+Legends map phase labels to names and instruction variants. Select one in
+your dataset-generation config:
+
+```yaml
+annotations:
+  legend: package://instructions/endoscope_guidance.yaml
+  legend_source: config
+  language_source: phase_legend
+```
+
+`legend` also accepts a YAML filename or an inline metadata mapping.
+
+- `legend_source`: `config` uses the supplied legend; `auto` (default) prefers
+  the phase legend in the recordings root's `dataset_metadata.json`, falling
+  back to the configured legend when none is saved.
+- `language_source`: `phase_legend` samples instructions from the legend;
+  `annotation` (default) uses segment-specific text when present, otherwise
+  falling back to the legend.
+
+See the [annotation configuration](tso_sensorium/episodes/generation_config.py)
+for all fields and defaults.
 
 ### Automatic phase labeling
 

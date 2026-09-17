@@ -10,14 +10,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sensor_msgs.msg import Image
-
-from tso_sensorium.recording.config import (
-    RecordingUIConfig,
-    TopicRecorderConfig,
-)
+from tso_sensorium.recording.config import RecordingUIConfig
 from tso_sensorium.recording.dashboard import RecordingService, create_app
-from tso_sensorium.recording.message_fields import resolve_message_type
+from tso_sensorium.recording.liveness import build_liveness_sources
 from tso_sensorium.recording.ros1.liveness import (
     CameraFeed,
     TopicLivenessMonitor,
@@ -36,14 +31,6 @@ def build_recording_service(config: RecordingUIConfig) -> RecordingService:
     Returns:
         The wired recording service.
     """
-    topic_message_types = {
-        recorder.topic_name: (
-            resolve_message_type(dotted_path=recorder.message_type)
-            if isinstance(recorder, TopicRecorderConfig)
-            else Image
-        )
-        for recorder in config.session.recorders
-    }
 
     def session_factory(
         episode_name: Optional[str], recorder_names: Optional[list[str]]
@@ -57,7 +44,7 @@ def build_recording_service(config: RecordingUIConfig) -> RecordingService:
     return RecordingService(
         config=config,
         liveness=TopicLivenessMonitor(
-            topic_message_types=topic_message_types,
+            topic_sources=build_liveness_sources(recorders=config.session.recorders),
             staleness_seconds=config.staleness_seconds,
         ),
         camera_feed=(
