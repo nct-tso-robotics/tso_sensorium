@@ -91,7 +91,7 @@ def parse_args():
     )
     parser.add_argument(
         "--interlaced_image_topic",
-        default="/stereo/camera_driver/image_raw",
+        default="/endoscope/capture/image_raw",
         help="Interlaced image topic",
     )
     parser.add_argument(
