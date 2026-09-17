@@ -301,6 +301,30 @@ From the dashboard you can:
   extraction, sync tolerance); discarded episodes are listed with the
   reason.
 
+### Phase legends
+
+Legends map phase labels to names and instruction variants. Select one in
+your dataset-generation config:
+
+```yaml
+annotations:
+  legend: package://instructions/endoscope_guidance.yaml
+  legend_source: config
+  language_source: phase_legend
+```
+
+`legend` also accepts a YAML filename or an inline metadata mapping.
+
+- `legend_source`: `config` uses the supplied legend; `auto` (default) prefers
+  the phase legend in the recordings root's `dataset_metadata.json`, falling
+  back to the configured legend when none is saved.
+- `language_source`: `phase_legend` samples instructions from the legend;
+  `annotation` (default) uses segment-specific text when present, otherwise
+  falling back to the legend.
+
+See the [annotation configuration](tso_sensorium/episodes/generation_config.py)
+for all fields and defaults.
+
 ### Automatic phase labeling
 
 Labelers segment episodes from recorded signals and write automatic

@@ -13,10 +13,57 @@ from typing import Dict, List, Union
 
 from pydantic import Field
 
-from tso_sensorium.configuration import ConfigModel
+from tso_sensorium.configuration import ConfigModel, load_yaml_with_includes
 from tso_sensorium.episodes.schema import CoordinateFrameFeatureMetadata
+from tso_sensorium.resources import resolve_asset_path
 
 DATASET_METADATA_FILE_NAME = "dataset_metadata.json"
+
+
+def load_phase_legend(*, config_path: Union[Path, str]) -> DatasetMetadata:
+    """Load a phase legend from a YAML file or packaged asset.
+
+    Args:
+        config_path: File path or ``package://instructions/<name>.yaml`` reference.
+
+    Returns:
+        Validated metadata containing phases with nonempty instruction variants.
+
+    Raises:
+        ValueError: If there are no phases or a phase has no usable instructions.
+    """
+    payload = load_yaml_with_includes(path=resolve_asset_path(path=config_path))
+    metadata = DatasetMetadata.model_validate(payload)
+    if not metadata.phase_legend:
+        raise ValueError(f"No phases found in {config_path}")
+    empty_phase_labels = [
+        label
+        for label, definition in sorted(metadata.phase_legend.items())
+        if not definition.instructions
+        or any(not instruction.strip() for instruction in definition.instructions)
+    ]
+    if empty_phase_labels:
+        labels = ", ".join(str(label) for label in empty_phase_labels)
+        raise ValueError(f"Phases without instructions in {config_path}: {labels}")
+    return metadata
+
+
+def load_phase_instructions(
+    *, config_path: Union[Path, str]
+) -> dict[int, tuple[str, ...]]:
+    """Load instruction variants using the same legend as dataset generation.
+
+    Args:
+        config_path: File path or ``package://instructions/<name>.yaml`` reference.
+
+    Returns:
+        Phase labels mapped to their configured instruction variants.
+    """
+    metadata = load_phase_legend(config_path=config_path)
+    return {
+        label: tuple(definition.instructions)
+        for label, definition in metadata.phase_legend.items()
+    }
 
 
 class PhaseDefinition(ConfigModel):
