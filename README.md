@@ -301,47 +301,71 @@ From the dashboard you can:
   extraction, sync tolerance); discarded episodes are listed with the
   reason.
 
-### Shared phase definitions and live instructions
+### Phase legends
 
-Phase legends are installed Sensorium assets. Both external input publishers
-and offline dataset generation use the same ROS-independent loader:
+A phase legend maps integer labels to phase names and language instruction
+variants. Episode annotations specify when each phase occurs; the legend
+supplies its meaning and, optionally, generated language labels.
 
-```python
-from tso_sensorium.episodes.legend import load_phase_instructions, load_phase_legend
-
-reference = "package://instructions/bowel_retraction_phantom.yaml"
-phases = load_phase_instructions(config_path=reference)
-metadata = load_phase_legend(config_path=reference)
-```
-
-Custom YAML files with the same metadata schema and relative `!include`
-references are also supported.
-
-Dataset generation selects a legend with the same reference:
+In a dataset-generation YAML, define a legend inline like this:
 
 ```yaml
 annotations:
   legend_source: config
-  legend: package://instructions/bowel_retraction_phantom.yaml
+  language_source: phase_legend
+  legend:
+    phase_legend:
+      0:
+        name: Hold
+        instructions: ["Hold position.", "Keep still."]
+      1:
+        name: Advance
+        instructions: ["Move forward."]
 ```
 
-Use `legend_source: config` to prevent saved root metadata from replacing the
-selected legend. Inline legends are also supported. Pin the same Sensorium
-revision on publishing and processing machines.
+`annotations.legend` accepts any of these forms:
 
-The interactive ROS publisher belongs to `input_devices/language_publisher`
-in the testbed workspace. Its Python package depends on Sensorium; Sensorium
-does not depend on the testbed or import its publisher. In a ROS 1 Pixi shell
-with the generated custom messages on `PYTHONPATH`, run:
+- An inline metadata mapping, as above.
+- A YAML filename, for example `legend: /data/phases.yaml`. The file contains
+  the mapping shown under `legend`, without the `annotations` or `legend`
+  wrapper. Relative filenames are resolved from the working directory;
+  `!include` paths inside YAML files are relative to the including file.
+- A packaged asset reference, for example
+  `legend: package://instructions/endoscope_guidance.yaml`.
+- Omitted or `null`: use the recordings-root metadata, with
+  `legend_source: auto`.
 
-```bash
-python "$TESTBED_WORKSPACE/src/input_devices/language_publisher/scripts/language_publisher.py" \
-    --config_path package://instructions/bowel_retraction_phantom.yaml
+The two source settings control different decisions:
+
+| Setting | Value | Behavior |
+| --- | --- | --- |
+| `legend_source` | `auto` (default) | Use the recordings-root metadata if it defines a nonempty phase legend; otherwise fall back to `legend`. |
+| `legend_source` | `config` | Always use `legend`, which must be provided. Ignore the recordings-root legend. |
+| `language_source` | `annotation` (default) | Use each segment's `language` text when present; otherwise sample from the resolved legend. |
+| `language_source` | `phase_legend` | Always sample from the resolved legend, ignoring segment-specific language text. |
+
+Sampling chooses one instruction variant per phase per episode, seeded by
+the episode name so regeneration is reproducible.
+
+`metadata_file` names the recordings-root metadata file (default:
+`dataset_metadata.json`); `file_name` names the timeline annotation file inside
+each episode (default: `annotations.json`). `phase_column` and `language_column`
+set the output column names (defaults: `phase` and `language_instruction`).
+Uncovered timestamps receive phase `-1` and empty language; set
+`require_full_coverage: true` to reject those episodes instead.
+
+To load a standalone YAML or packaged legend in Python, without ROS:
+
+```python
+from tso_sensorium.episodes.legend import load_phase_instructions, load_phase_legend
+
+phases = load_phase_instructions(config_path="/data/phases.yaml")
+metadata = load_phase_legend(config_path="/data/phases.yaml")
 ```
 
-The publisher runs on the operator's host independently of where recording
-runs. A shared phase legend does not guarantee the same sampled wording;
-record the live instruction topic when the exact issued command is needed offline.
+`phases` maps integer labels to tuples of instruction variants; `metadata`
+contains the validated dataset metadata. These loaders require a nonempty
+phase legend and at least one nonblank instruction per phase.
 
 ### Automatic phase labeling
 
