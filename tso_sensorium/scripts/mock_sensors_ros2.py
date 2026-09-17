@@ -9,10 +9,11 @@ toggling gripper, matching ``configs/recording/mock_ui.yaml``:
 import numpy as np
 import rclpy
 from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool
 
 from tso_sensorium.scripts.mock_scene import (
+    CAMERA_INFO_TOPIC,
     CAMERA_TOPIC,
     FRAME_HEIGHT,
     FRAME_WIDTH,
@@ -32,6 +33,7 @@ def main() -> None:
     rclpy.init()
     node = rclpy.create_node("mock_sensors")
     camera = node.create_publisher(Image, CAMERA_TOPIC, QUEUE_DEPTH)
+    camera_info = node.create_publisher(CameraInfo, CAMERA_INFO_TOPIC, QUEUE_DEPTH)
     pose = node.create_publisher(PoseStamped, POSE_TOPIC, QUEUE_DEPTH)
     gripper = node.create_publisher(Bool, GRIPPER_TOPIC, QUEUE_DEPTH)
 
@@ -50,6 +52,11 @@ def main() -> None:
         image_message.data = frame.tobytes()
         image_message.header.stamp = now
         camera.publish(image_message)
+        camera_info.publish(
+            CameraInfo(
+                header=image_message.header, height=FRAME_HEIGHT, width=FRAME_WIDTH
+            )
+        )
 
         pose_message = PoseStamped()
         pose_message.header.stamp = now

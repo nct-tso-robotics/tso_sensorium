@@ -93,6 +93,9 @@ states:
       - quaternion_y
       - quaternion_z
       - quaternion_w
+  - state_file: language_instruction.csv
+    columns:
+      - language_instruction
 
 table_transforms:
   - type: parse_vector3

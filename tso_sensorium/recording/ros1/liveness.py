@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional
+from typing import Any, Callable, Optional
 
 import cv2
 import numpy as np
@@ -11,6 +11,7 @@ import rospy
 from sensor_msgs.msg import Image
 
 from tso_sensorium.recording.core import image_buffer_to_bgr_frame
+from tso_sensorium.recording.liveness import LivenessSource
 
 JPEG_QUALITY = 80
 
@@ -23,31 +24,31 @@ class TopicLivenessMonitor:
     type here would corrupt the recorders' callbacks on the same topics.
 
     Args:
-        topic_message_types: Mapping of topic name to its message class.
+        topic_sources: Status sources keyed by the recorded topic name.
         staleness_seconds: Age after which a topic counts as stale.
     """
 
     def __init__(
         self,
-        topic_message_types: Dict[str, type],
+        topic_sources: dict[str, LivenessSource],
         staleness_seconds: float = 1.0,
-    ):
+    ) -> None:
         self.staleness_seconds = staleness_seconds
         self._last_message_times: dict[str, Optional[float]] = {
-            topic_name: None for topic_name in topic_message_types
+            topic_name: None for topic_name in topic_sources
         }
         self._subscribers = [
             rospy.Subscriber(
-                topic_name,
-                message_type,
-                self._make_callback(topic_name=topic_name),
+                name=source.topic_name,
+                data_class=source.message_type,
+                callback=self._make_callback(topic_name=topic_name),
                 queue_size=1,
             )
-            for topic_name, message_type in topic_message_types.items()
+            for topic_name, source in topic_sources.items()
         ]
 
-    def _make_callback(self, topic_name: str):
-        def callback(message) -> None:
+    def _make_callback(self, topic_name: str) -> Callable[[Any], None]:
+        def callback(message: Any) -> None:
             self._last_message_times[topic_name] = time.monotonic()
 
         return callback

@@ -381,6 +381,56 @@ def test_end_to_end_generates_csv_episode_from_recording(tmp_path):
 
 
 @pytest.mark.integration
+def test_end_to_end_aligns_recorded_language_into_episode_csv(tmp_path):
+    recordings_root = tmp_path / "recordings"
+    episode_directory = recordings_root / "episode_000"
+    episode_directory.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "time": [0, int(1e8), int(2e8)],
+            "position": [0.0, 1.0, 2.0],
+        }
+    ).to_csv(episode_directory / "robot_state.csv", index=False)
+    pd.DataFrame(
+        {
+            "time": [0, int(2e8)],
+            "language_instruction": ["Zoom in.", "Do not move."],
+        }
+    ).to_csv(episode_directory / "language_instruction.csv", index=False)
+    config = DatasetGenerationConfig(
+        recordings_root=str(recordings_root),
+        schema=DatasetSchema(
+            name="language_alignment",
+            fps=5,
+            cameras=[],
+            arms=[],
+        ),
+        states=[
+            StateSourceConfig(
+                state_file="robot_state.csv",
+                columns=["position"],
+            ),
+            StateSourceConfig(
+                state_file="language_instruction.csv",
+                columns=["language_instruction"],
+            ),
+        ],
+        writer=CsvWriterConfig(),
+        n_jobs=1,
+    )
+
+    report = generate_dataset(config=config)
+
+    assert report.written == ["episode_000"]
+    episode_table = pd.read_csv(episode_directory / "episode.csv")
+    assert episode_table["language_instruction"].tolist() == [
+        "Zoom in.",
+        "Zoom in.",
+        "Do not move.",
+    ]
+
+
+@pytest.mark.integration
 def test_end_to_end_derives_actions_in_transition_start_camera_frame(tmp_path):
     recordings_root = tmp_path / "recordings"
     episode_directory = recordings_root / "episode_000"

@@ -14,6 +14,8 @@ from pydantic import Field
 from tso_sensorium.configuration import ConfigModel
 from tso_sensorium.episodes.generation_config import DatasetGenerationConfig
 
+CAMERA_INFO_MESSAGE_TYPE = "sensor_msgs.msg.CameraInfo"
+
 
 class RecorderConfig(ConfigModel, abc.ABC):
     """One recorded stream: a topic to capture and where to store it.
@@ -57,11 +59,18 @@ class VideoRecorderConfig(RecorderConfig):
         frames_per_second: Playback frame rate of the written video.
         lossless_compression: Whether to encode losslessly. Lossless files
             are considerably larger.
+        liveness_topic: Lightweight per-frame status topic used by the UI.
+            Required when using the recording UI; no topic name is inferred.
+            Command-line recording does not use readiness monitoring.
+        liveness_message_type: Message class published on the status topic.
+            This does not change the image type used for recording.
     """
 
     type: Literal["video"] = "video"
     frames_per_second: float = 30.0
     lossless_compression: bool = False
+    liveness_topic: Optional[str] = None
+    liveness_message_type: str = CAMERA_INFO_MESSAGE_TYPE
 
 
 AnyRecorderConfig = Annotated[
@@ -75,8 +84,8 @@ class RecordingSessionConfig(ConfigModel):
     Args:
         output_folder: Folder storing the recordings; the episode name is
             appended to it.
-        episode_name: Name of the episode. Defaults to a time-based
-            string.
+        episode_name: Optional descriptive prefix. The creation timestamp is
+            always appended to the saved episode name.
         record_rosbag: Whether to also record a rosbag of
             ``rosbag_topics``.
         rosbag_topics: Topics captured in the rosbag.

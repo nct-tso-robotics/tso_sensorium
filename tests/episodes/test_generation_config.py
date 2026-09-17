@@ -142,6 +142,8 @@ def test_shipped_endoscope_guidance_config_derives_moving_frame_actions():
         "quaternion_z",
         "quaternion_w",
     ]
+    assert config.states[2].state_file == "language_instruction.csv"
+    assert config.states[2].columns == ["language_instruction"]
     roll_transform = config.table_transforms[1]
     assert roll_transform.column == "relative_pivot_rpy"
     assert roll_transform.output_columns == [

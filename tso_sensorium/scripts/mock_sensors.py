@@ -9,10 +9,11 @@ toggling gripper, matching ``configs/recording/mock_ui.yaml``:
 import numpy as np
 import rospy
 from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool
 
 from tso_sensorium.scripts.mock_scene import (
+    CAMERA_INFO_TOPIC,
     CAMERA_TOPIC,
     FRAME_HEIGHT,
     FRAME_WIDTH,
@@ -29,6 +30,7 @@ def main() -> None:
     """Publish the mock sensors until interrupted."""
     rospy.init_node("mock_sensors", anonymous=True)
     camera = rospy.Publisher(CAMERA_TOPIC, Image, queue_size=1)
+    camera_info = rospy.Publisher(CAMERA_INFO_TOPIC, CameraInfo, queue_size=1)
     pose = rospy.Publisher(POSE_TOPIC, PoseStamped, queue_size=1)
     gripper = rospy.Publisher(GRIPPER_TOPIC, Bool, queue_size=1)
 
@@ -46,6 +48,11 @@ def main() -> None:
         image_message.data = frame.tobytes()
         image_message.header.stamp = now
         camera.publish(image_message)
+        camera_info.publish(
+            CameraInfo(
+                header=image_message.header, height=FRAME_HEIGHT, width=FRAME_WIDTH
+            )
+        )
 
         pose_message = PoseStamped()
         pose_message.header.stamp = now

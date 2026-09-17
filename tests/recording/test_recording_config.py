@@ -31,6 +31,49 @@ FORCE_SESSION_CONFIG = REPOSITORY_ROOT / "configs" / "recording" / "force_sessio
 FORCE_SESSION_UI_CONFIG = (
     REPOSITORY_ROOT / "configs" / "recording" / "force_session_ui.yaml"
 )
+MOCK_UI_CONFIG = REPOSITORY_ROOT / "configs" / "recording" / "mock_ui.yaml"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "config_path, expected_sources",
+    [
+        (
+            config_path,
+            {
+                "/laparoscope/camera/left/image_raw": (
+                    "/laparoscope/camera/left/camera_info"
+                ),
+                "/laparoscope/camera/right/image_raw": (
+                    "/laparoscope/camera/right/camera_info"
+                ),
+                "/stereo/camera_driver/image_raw": "/stereo/camera_driver/camera_info",
+            },
+        )
+        for config_path in (
+            TSO_TESTBED_UI_CONFIG,
+            ENDOSCOPE_GUIDANCE_UI_CONFIG,
+            FORCE_SESSION_UI_CONFIG,
+        )
+    ]
+    + [(MOCK_UI_CONFIG, {"/mock/camera": "/mock/camera_info"})],
+)
+def test_shipped_ui_configs_explicitly_select_lightweight_video_status(
+    config_path: Path, expected_sources: dict[str, str]
+) -> None:
+    config = load_config(config_class=RecordingUIConfig, config_path=config_path)
+    video_recorders = [
+        recorder
+        for recorder in config.session.recorders
+        if isinstance(recorder, VideoRecorderConfig)
+    ]
+
+    assert {
+        recorder.topic_name: recorder.liveness_topic for recorder in video_recorders
+    } == expected_sources
+    assert {recorder.liveness_message_type for recorder in video_recorders} == {
+        "sensor_msgs.msg.CameraInfo"
+    }
 
 
 @pytest.mark.unit
@@ -77,7 +120,7 @@ def test_shipped_tso_testbed_ui_config_decodes_nested_includes():
 
 
 @pytest.mark.unit
-def test_shipped_endoscope_guidance_config_contains_only_guidance_streams():
+def test_shipped_endoscope_guidance_config_contains_only_guidance_streams() -> None:
     config = load_config(
         config_class=RecordingSessionConfig,
         config_path=ENDOSCOPE_GUIDANCE_CONFIG,
@@ -86,11 +129,24 @@ def test_shipped_endoscope_guidance_config_contains_only_guidance_streams():
     assert [recorder.topic_name for recorder in config.recorders] == [
         "/ur5e_rcm_twist_controller/RobotState",
         "/robot_camera_transform",
+        "/language_instruction",
         "/laparoscope/camera/left/image_raw",
         "/laparoscope/camera/right/image_raw",
         "/stereo/camera_driver/image_raw",
     ]
     assert config.recorders[0].file_name == "robot_state"
+    language_recorder = config.recorders[2]
+    assert language_recorder.model_dump() == {
+        "type": "topic",
+        "file_name": "language_instruction",
+        "topic_name": "/language_instruction",
+        "queue_size": 100,
+        "required": True,
+        "message_type": "testbed_msgs.msg.LanguageInstruction",
+        "fields": ["instruction"],
+        "csv_header": ["language_instruction"],
+    }
+    assert "/language_instruction" in config.rosbag_topics
     assert all(
         excluded_topic not in config.rosbag_topics
         for excluded_topic in (
