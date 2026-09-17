@@ -303,69 +303,27 @@ From the dashboard you can:
 
 ### Phase legends
 
-A phase legend maps integer labels to phase names and language instruction
-variants. Episode annotations specify when each phase occurs; the legend
-supplies its meaning and, optionally, generated language labels.
-
-In a dataset-generation YAML, define a legend inline like this:
+Legends map phase labels to names and instruction variants. Select one in
+your dataset-generation config:
 
 ```yaml
 annotations:
+  legend: package://instructions/endoscope_guidance.yaml
   legend_source: config
   language_source: phase_legend
-  legend:
-    phase_legend:
-      0:
-        name: Hold
-        instructions: ["Hold position.", "Keep still."]
-      1:
-        name: Advance
-        instructions: ["Move forward."]
 ```
 
-`annotations.legend` accepts any of these forms:
+`legend` also accepts a YAML filename or an inline metadata mapping.
 
-- An inline metadata mapping, as above.
-- A YAML filename, for example `legend: /data/phases.yaml`. The file contains
-  the mapping shown under `legend`, without the `annotations` or `legend`
-  wrapper. Relative filenames are resolved from the working directory;
-  `!include` paths inside YAML files are relative to the including file.
-- A packaged asset reference, for example
-  `legend: package://instructions/endoscope_guidance.yaml`.
-- Omitted or `null`: use the recordings-root metadata, with
-  `legend_source: auto`.
+- `legend_source`: `config` uses the supplied legend; `auto` (default) prefers
+  the phase legend in the recordings root's `dataset_metadata.json`, falling
+  back to the configured legend when none is saved.
+- `language_source`: `phase_legend` samples instructions from the legend;
+  `annotation` (default) uses segment-specific text when present, otherwise
+  falling back to the legend.
 
-The two source settings control different decisions:
-
-| Setting | Value | Behavior |
-| --- | --- | --- |
-| `legend_source` | `auto` (default) | Use the recordings-root metadata if it defines a nonempty phase legend; otherwise fall back to `legend`. |
-| `legend_source` | `config` | Always use `legend`, which must be provided. Ignore the recordings-root legend. |
-| `language_source` | `annotation` (default) | Use each segment's `language` text when present; otherwise sample from the resolved legend. |
-| `language_source` | `phase_legend` | Always sample from the resolved legend, ignoring segment-specific language text. |
-
-Sampling chooses one instruction variant per phase per episode, seeded by
-the episode name so regeneration is reproducible.
-
-`metadata_file` names the recordings-root metadata file (default:
-`dataset_metadata.json`); `file_name` names the timeline annotation file inside
-each episode (default: `annotations.json`). `phase_column` and `language_column`
-set the output column names (defaults: `phase` and `language_instruction`).
-Uncovered timestamps receive phase `-1` and empty language; set
-`require_full_coverage: true` to reject those episodes instead.
-
-To load a standalone YAML or packaged legend in Python, without ROS:
-
-```python
-from tso_sensorium.episodes.legend import load_phase_instructions, load_phase_legend
-
-phases = load_phase_instructions(config_path="/data/phases.yaml")
-metadata = load_phase_legend(config_path="/data/phases.yaml")
-```
-
-`phases` maps integer labels to tuples of instruction variants; `metadata`
-contains the validated dataset metadata. These loaders require a nonempty
-phase legend and at least one nonblank instruction per phase.
+See the [annotation configuration](tso_sensorium/episodes/generation_config.py)
+for all fields and defaults.
 
 ### Automatic phase labeling
 
