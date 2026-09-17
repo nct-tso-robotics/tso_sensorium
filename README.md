@@ -301,6 +301,48 @@ From the dashboard you can:
   extraction, sync tolerance); discarded episodes are listed with the
   reason.
 
+### Shared phase definitions and live instructions
+
+Phase legends are installed Sensorium assets. Both external input publishers
+and offline dataset generation use the same ROS-independent loader:
+
+```python
+from tso_sensorium.episodes.legend import load_phase_instructions, load_phase_legend
+
+reference = "package://instructions/bowel_retraction_phantom.yaml"
+phases = load_phase_instructions(config_path=reference)
+metadata = load_phase_legend(config_path=reference)
+```
+
+Custom YAML files with the same metadata schema and relative `!include`
+references are also supported.
+
+Dataset generation selects a legend with the same reference:
+
+```yaml
+annotations:
+  legend_source: config
+  legend: package://instructions/bowel_retraction_phantom.yaml
+```
+
+Use `legend_source: config` to prevent saved root metadata from replacing the
+selected legend. Inline legends are also supported. Pin the same Sensorium
+revision on publishing and processing machines.
+
+The interactive ROS publisher belongs to `input_devices/language_publisher`
+in the testbed workspace. Its Python package depends on Sensorium; Sensorium
+does not depend on the testbed or import its publisher. In a ROS 1 Pixi shell
+with the generated custom messages on `PYTHONPATH`, run:
+
+```bash
+python "$TESTBED_WORKSPACE/src/input_devices/language_publisher/scripts/language_publisher.py" \
+    --config_path package://instructions/bowel_retraction_phantom.yaml
+```
+
+The publisher runs on the operator's host independently of where recording
+runs. A shared phase legend does not guarantee the same sampled wording;
+record the live instruction topic when the exact issued command is needed offline.
+
 ### Automatic phase labeling
 
 Labelers segment episodes from recorded signals and write automatic

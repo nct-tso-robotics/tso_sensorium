@@ -165,7 +165,7 @@ annotations:
   language_column: language
   language_source: phase_legend
   legend_source: config
-  legend: !include instructions/endoscope_guidance.yaml
+  legend: package://instructions/endoscope_guidance.yaml
 
 dataset_transforms:
   - type: percentile_denoise_columns

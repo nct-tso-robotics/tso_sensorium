@@ -123,7 +123,8 @@ table_transforms:
 annotations:
   phase_column: task_phase
   language_column: language
-  legend: !include instructions/bowel_retraction_phantom.yaml
+  legend_source: config
+  legend: package://instructions/bowel_retraction_phantom.yaml
 
 writer:
   type: csv

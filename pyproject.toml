@@ -82,6 +82,7 @@ include = ["tso_sensorium*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.xml", "*.yml", "*.yaml", "*.json", "*.html"]
+"tso_sensorium" = ["assets/instructions/*.yaml"]
 
 [tool.pytest.ini_options]
 markers = [

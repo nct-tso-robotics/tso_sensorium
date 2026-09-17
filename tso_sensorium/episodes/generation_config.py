@@ -10,15 +10,16 @@ import abc
 import importlib.util
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from tso_sensorium.configuration import ConfigModel, OverrideValue, set_by_path
 from tso_sensorium.episodes.dataset_transforms import AnyDatasetTransform
 from tso_sensorium.episodes.legend import (
     DATASET_METADATA_FILE_NAME,
     DatasetMetadata,
+    load_phase_legend,
 )
 from tso_sensorium.episodes.schema import DatasetSchema
 from tso_sensorium.episodes.table_transforms import AnyTableTransform
@@ -64,8 +65,8 @@ class AnnotationsConfig(ConfigModel):
         language_source: Whether segment annotations or the phase legend supply
             language labels.
         legend_source: Whether root metadata may override the configured legend.
-        legend: Inline dataset metadata with the phase legend; when
-            ``None``, the metadata file at the recordings root is used.
+        legend: Inline dataset metadata, a YAML path, or a ``package://`` asset
+            reference. When ``None``, use metadata at the recordings root.
         metadata_file: Metadata file name at the recordings root.
         require_full_coverage: Whether uncovered timestamps discard the
             episode instead of receiving empty labels.
@@ -79,6 +80,16 @@ class AnnotationsConfig(ConfigModel):
     legend: Optional[DatasetMetadata] = None
     metadata_file: str = DATASET_METADATA_FILE_NAME
     require_full_coverage: bool = False
+
+    @field_validator("legend", mode="before")
+    @classmethod
+    def load_legend_reference(
+        cls, value: DatasetMetadata | dict[str, Any] | str | Path | None
+    ) -> DatasetMetadata | dict[str, Any] | None:
+        """Resolve explicit legend references through the shared phase loader."""
+        if isinstance(value, (str, Path)):
+            return load_phase_legend(config_path=value)
+        return value
 
     @model_validator(mode="after")
     def validate_legend_source(self) -> "AnnotationsConfig":
