@@ -1,0 +1,146 @@
+name: CI and release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+jobs:
+  test:
+    name: Tests (${{ matrix.environment }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [default, ros1, ros2]
+    env:
+      ROS_IP: 127.0.0.1
+      ROS_LOCALHOST_ONLY: "1"
+      ROS_DOMAIN_ID: "173"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          pixi-version: v0.73.0
+          environments: ${{ matrix.environment }}
+          locked: true
+          cache-write: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Lint
+        if: matrix.environment == 'default'
+        run: pixi run --locked -e default lint
+      - name: Compile
+        env:
+          PIXI_ENVIRONMENT: ${{ matrix.environment }}
+        run: pixi run --locked -e "$PIXI_ENVIRONMENT" python -Werror -m compileall -q tso_sensorium tests
+      - name: Test
+        env:
+          PIXI_ENVIRONMENT: ${{ matrix.environment }}
+          ROS_HOME: ${{ runner.temp }}/ros
+        run: pixi run --locked -e "$PIXI_ENVIRONMENT" pytest --junitxml="$RUNNER_TEMP/results.xml"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tests-${{ matrix.environment }}
+          path: ${{ runner.temp }}/results.xml
+          if-no-files-found: ignore
+
+  package:
+    name: Package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Check version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          from tso_sensorium import __version__
+
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          version = project["project"]["version"]
+          if version != __version__:
+              raise SystemExit("pyproject.toml and tso_sensorium.__version__ must match")
+          tag = os.environ["RELEASE_TAG"]
+          if tag and tag != f"v{version}":
+              raise SystemExit(f"Release tag {tag!r} must be v{version}")
+          PY
+      - name: Build and check distributions
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check --strict dist/*
+      - name: Install wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-test"
+          "$RUNNER_TEMP/wheel-test/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/wheel-test/bin/python" -m pip check
+      - name: Check installed package
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/wheel-test/bin/tso-generate-dataset" --help
+          "$RUNNER_TEMP/wheel-test/bin/python" -I - <<'PY'
+          from importlib.metadata import version
+          from pathlib import Path
+
+          from tso_sensorium import __version__
+          from tso_sensorium.episodes.legend import load_phase_instructions
+          from tso_sensorium.resources import ASSETS_DIR, STORZ_ENDOSCOPE_CALIBRATION_PATH
+
+          if __version__ != version("tso-sensorium"):
+              raise SystemExit("Installed package version does not match its metadata")
+          legends = sorted(Path(ASSETS_DIR).glob("instructions/*.yaml"))
+          if not legends:
+              raise SystemExit("Instruction assets are missing from the wheel")
+          for legend in legends:
+              load_phase_instructions(config_path=f"package://instructions/{legend.name}")
+          if not STORZ_ENDOSCOPE_CALIBRATION_PATH.is_file():
+              raise SystemExit("Calibration asset is missing from the wheel")
+          if not ASSETS_DIR.joinpath("recording_dashboard.html").is_file():
+              raise SystemExit("Dashboard asset is missing from the wheel")
+          PY
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distributions
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'release' && github.repository == 'nct-tso-robotics/tso_sensorium'
+    needs: [test, package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tso-sensorium
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: distributions
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
