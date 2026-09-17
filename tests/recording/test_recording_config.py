@@ -41,13 +41,9 @@ MOCK_UI_CONFIG = REPOSITORY_ROOT / "configs" / "recording" / "mock_ui.yaml"
         (
             config_path,
             {
-                "/laparoscope/camera/left/image_raw": (
-                    "/laparoscope/camera/left/camera_info"
-                ),
-                "/laparoscope/camera/right/image_raw": (
-                    "/laparoscope/camera/right/camera_info"
-                ),
-                "/stereo/camera_driver/image_raw": "/stereo/camera_driver/camera_info",
+                "/endoscope/left/image_raw": "/endoscope/left/camera_info",
+                "/endoscope/right/image_raw": "/endoscope/right/camera_info",
+                "/endoscope/capture/image_raw": "/endoscope/capture/camera_info",
             },
         )
         for config_path in (
@@ -130,9 +126,9 @@ def test_shipped_endoscope_guidance_config_contains_only_guidance_streams() -> N
         "/ur5e_rcm_twist_controller/RobotState",
         "/robot_camera_transform",
         "/language_instruction",
-        "/laparoscope/camera/left/image_raw",
-        "/laparoscope/camera/right/image_raw",
-        "/stereo/camera_driver/image_raw",
+        "/endoscope/left/image_raw",
+        "/endoscope/right/image_raw",
+        "/endoscope/capture/image_raw",
     ]
     assert config.recorders[0].file_name == "robot_state"
     language_recorder = config.recorders[2]
@@ -164,7 +160,7 @@ def test_shipped_endoscope_guidance_ui_uses_left_camera_preview():
         config_path=ENDOSCOPE_GUIDANCE_UI_CONFIG,
     )
 
-    assert config.camera_topic == "/laparoscope/camera/left/image_raw"
+    assert config.camera_topic == "/endoscope/left/image_raw"
     assert config.generation is not None
     assert config.generation.dataset_schema.name == "endoscope_guidance"
     assert config.generation.dataset_schema.action_columns[-1] == (
@@ -206,9 +202,9 @@ def test_shipped_force_session_config_records_force_setup():
     assert [recorder.topic_name for recorder in config.recorders] == [
         "/ur5e_rcm_twist_controller/RobotState",
         "/robot_camera_transform",
-        "/laparoscope/camera/left/image_raw",
-        "/laparoscope/camera/right/image_raw",
-        "/stereo/camera_driver/image_raw",
+        "/endoscope/left/image_raw",
+        "/endoscope/right/image_raw",
+        "/endoscope/capture/image_raw",
         "/bota_sensor_publisher/wrench",
         "/bota_sensor_publisher/imu",
     ]
@@ -254,7 +250,7 @@ def test_shipped_force_session_ui_uses_home_recordings_folder():
     )
 
     assert config.session.output_folder == "~/tso_sensorium_recordings"
-    assert config.camera_topic == "/laparoscope/camera/left/image_raw"
+    assert config.camera_topic == "/endoscope/left/image_raw"
     assert config.generation is not None
     assert config.generation.dataset_schema.name == "bowel_retraction"
 

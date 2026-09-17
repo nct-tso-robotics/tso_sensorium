@@ -47,24 +47,24 @@ recorders:
 
   - type: video
     file_name: laparoscope_left
-    topic_name: /laparoscope/camera/left/image_raw
-    liveness_topic: /laparoscope/camera/left/camera_info
+    topic_name: /endoscope/left/image_raw
+    liveness_topic: /endoscope/left/camera_info
     liveness_message_type: sensor_msgs.msg.CameraInfo
     frames_per_second: 30.0
     queue_size: 10
 
   - type: video
     file_name: laparoscope_right
-    topic_name: /laparoscope/camera/right/image_raw
-    liveness_topic: /laparoscope/camera/right/camera_info
+    topic_name: /endoscope/right/image_raw
+    liveness_topic: /endoscope/right/camera_info
     liveness_message_type: sensor_msgs.msg.CameraInfo
     frames_per_second: 30.0
     queue_size: 10
 
   - type: video
     file_name: laparoscope_combined
-    topic_name: /stereo/camera_driver/image_raw
-    liveness_topic: /stereo/camera_driver/camera_info
+    topic_name: /endoscope/capture/image_raw
+    liveness_topic: /endoscope/capture/camera_info
     liveness_message_type: sensor_msgs.msg.CameraInfo
     frames_per_second: 10.0
     lossless_compression: true
