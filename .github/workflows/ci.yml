@@ -68,7 +68,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Check version
+      - name: Install build tools
+        run: python -m pip install build twine trove-classifiers
+      - name: Check metadata
         env:
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
         run: |
@@ -77,9 +79,14 @@ jobs:
           import tomllib
           from pathlib import Path
 
+          from trove_classifiers import classifiers
+
           from tso_sensorium import __version__
 
           project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          invalid = sorted(set(project["project"].get("classifiers", [])) - classifiers)
+          if invalid:
+              raise SystemExit(f"Invalid PyPI classifiers: {invalid}")
           version = project["project"]["version"]
           if version != __version__:
               raise SystemExit("pyproject.toml and tso_sensorium.__version__ must match")
@@ -89,7 +96,6 @@ jobs:
           PY
       - name: Build and check distributions
         run: |
-          python -m pip install build twine
           python -m build
           python -m twine check --strict dist/*
       - name: Install wheel in a clean environment
